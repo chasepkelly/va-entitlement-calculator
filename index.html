@@ -1,0 +1,2026 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!--
+  VA Entitlement Calculator — generic edition for loan officers.
+
+  TO BRAND THIS CALCULATOR FOR YOUR USE:
+  1. Update the <title> tag below with your brand
+  2. Add your NMLS#, company name, contact info to the footer
+  3. (Optional) Add a top-nav CTA linking to your contact / pre-approval flow
+  4. Verify FHFA county loan limit values at fhfa.gov before underwriting
+  5. Replace the disclaimer language with your firm's approved compliance text
+
+  Calculation engine follows VA Pamphlet 26-7 Chapters 3 and 7 plus
+  Circular 26-19-30 (Adjustment of Loan Limit Examples). 2026 county
+  limits are HERA-based per the official FHFA dataset.
+-->
+<title>VA Entitlement Calculator</title>
+<meta name="description" content="VA entitlement calculator for loan officers. Calculates available guaranty, maximum zero-down loan amount, and required cash to close — including partial entitlement, joint-veteran loans, multi-unit limits, and multi-loan COE entry per VA Pamphlet 26-7 and Circular 26-19-30.">
+<meta name="keywords" content="VA entitlement calculator, VA loan calculator, VA jumbo loan, partial entitlement, joint VA loan, COE entitlement charged">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy-deepest: #0a1628;
+    --navy-deep: #0f1f3a;
+    --navy: #16294a;
+    --navy-soft: #1e3559;
+    --gold: #c9a55c;
+    --gold-bright: #e3bd6e;
+    --gold-soft: rgba(201, 165, 92, 0.15);
+    --paper: #faf6ee;
+    --paper-warm: #f4ecd8;
+    --ink: #1a1a1a;
+    --ink-soft: #4a4a4a;
+    --ink-muted: #7a7a7a;
+    --rule: rgba(10, 22, 40, 0.12);
+    --rule-strong: rgba(10, 22, 40, 0.25);
+    --error: #a83232;
+    --success: #2d5e3e;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.5;
+    min-height: 100vh;
+  }
+
+  body {
+    background-image:
+      radial-gradient(ellipse at top left, rgba(201, 165, 92, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at bottom right, rgba(22, 41, 74, 0.04) 0%, transparent 50%);
+    background-attachment: fixed;
+  }
+
+  .container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 48px 32px 80px;
+  }
+
+  /* ============ HEADER ============ */
+  .masthead {
+    border-top: 4px solid var(--navy-deepest);
+    border-bottom: 1px solid var(--rule-strong);
+    padding: 28px 0 24px;
+    margin-bottom: 48px;
+    position: relative;
+  }
+
+  .masthead::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold-on-paper);
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .eyebrow::before {
+    content: '';
+    width: 32px;
+    height: 1px;
+    background: var(--gold);
+  }
+
+  h1.title {
+    font-family: 'Fraunces', serif;
+    font-weight: 500;
+    font-size: clamp(38px, 5vw, 58px);
+    line-height: 1.02;
+    letter-spacing: -0.02em;
+    color: var(--navy-deepest);
+    margin-bottom: 12px;
+  }
+
+  h1.title em {
+    font-style: italic;
+    font-weight: 400;
+    color: var(--gold-on-paper);
+  }
+
+  .subtitle {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    font-style: italic;
+    color: var(--ink-soft);
+    max-width: 640px;
+    line-height: 1.5;
+  }
+
+  /* ============ LAYOUT ============ */
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+
+  @media (max-width: 920px) {
+    .grid { grid-template-columns: 1fr; gap: 36px; }
+    .container { padding: 32px 20px 60px; }
+  }
+
+  /* ============ INPUT PANEL ============ */
+  .panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    position: relative;
+  }
+
+  .section {
+    background: #fff;
+    border: 1px solid var(--rule-strong);
+    border-radius: 14px;
+    padding: 30px 32px 28px;
+    box-shadow: 0 1px 2px rgba(10, 22, 40, 0.04);
+    position: relative;
+  }
+
+  @media (max-width: 920px) {
+    .section { padding: 24px 22px 22px; border-radius: 12px; }
+  }
+
+  .section-label {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--navy-deepest);
+    background: var(--paper-warm);
+    border: 1px solid rgba(201, 165, 92, 0.4);
+    padding: 6px 12px;
+    border-radius: 999px;
+    margin-bottom: 14px;
+  }
+
+  .section-label .num {
+    color: var(--gold-on-paper);
+    font-weight: 700;
+  }
+
+  .section-title {
+    font-family: 'Fraunces', serif;
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--navy-deepest);
+    margin-bottom: 20px;
+    letter-spacing: -0.01em;
+  }
+
+  .section + .section {
+    margin-top: 0;
+    padding-top: 30px;
+    border-top: 1px solid var(--rule-strong);
+  }
+
+  /* ============ TOP NAV ============ */
+  .topnav {
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule-strong);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    backdrop-filter: blur(8px);
+    background-color: rgba(250, 246, 238, 0.9);
+  }
+
+  .topnav-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 14px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .topnav-brand {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    font-weight: 600;
+    color: var(--navy-deepest);
+    letter-spacing: -0.01em;
+    text-decoration: none;
+  }
+
+  .topnav-links {
+    display: none;
+    gap: 28px;
+    align-items: center;
+  }
+
+  @media (min-width: 720px) {
+    .topnav-links { display: flex; }
+  }
+
+  .topnav-links a {
+    font-size: 13px;
+    color: var(--ink-soft);
+    text-decoration: none;
+    transition: color 0.15s;
+  }
+
+  .topnav-links a:hover {
+    color: var(--navy-deepest);
+  }
+
+  .topnav-cta {
+    background: var(--navy-deepest);
+    color: var(--paper);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+
+  .topnav-cta:hover {
+    background: var(--navy-deep);
+  }
+
+  .field {
+    margin-bottom: 18px;
+  }
+
+  .field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    margin-bottom: 6px;
+    letter-spacing: -0.005em;
+  }
+
+  .field-help {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 4px;
+    line-height: 1.4;
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+  }
+
+  .input-wrap {
+    position: relative;
+  }
+
+  .input-prefix {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Fraunces', serif;
+    color: var(--ink-muted);
+    font-size: 16px;
+    pointer-events: none;
+  }
+
+  input[type="text"], input[type="number"], select {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper);
+    font-family: 'Inter', sans-serif;
+    font-size: 15px;
+    color: var(--ink);
+    transition: border-color 0.15s, box-shadow 0.15s;
+    border-radius: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  input[type="text"].with-prefix, input[type="number"].with-prefix {
+    padding-left: 28px;
+  }
+
+  input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    outline: none;
+    border-color: var(--navy-deepest);
+    box-shadow: 0 0 0 3px var(--gold-soft);
+  }
+
+  select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%230a1628' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+    padding-right: 36px;
+    cursor: pointer;
+  }
+
+  /* Toggle switch */
+  .toggle-group {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper);
+  }
+
+  .toggle-group input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+  }
+
+  .toggle-group label {
+    padding: 11px 14px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-soft);
+    transition: all 0.18s;
+    user-select: none;
+  }
+
+  .toggle-group label:first-of-type {
+    border-right: 1px solid var(--rule);
+  }
+
+  .toggle-group input[type="radio"]:checked + label {
+    background: var(--navy-deepest);
+    color: var(--paper);
+  }
+
+  /* Scenario stack — vertical radio cards */
+  .scenario-group {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--rule-strong);
+    background: var(--paper);
+    padding: 4px;
+  }
+
+  .scenario-option {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: all 0.15s;
+    position: relative;
+  }
+
+  .scenario-option:hover {
+    background: rgba(201, 165, 92, 0.06);
+  }
+
+  .scenario-option input[type="radio"] {
+    margin-top: 3px;
+    accent-color: var(--navy-deepest);
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+  }
+
+  .scenario-option:has(input:checked),
+  .scenario-option.is-checked {
+    background: var(--navy-deepest);
+    border-color: var(--gold);
+  }
+
+  .scenario-option:has(input:checked) .scenario-title,
+  .scenario-option.is-checked .scenario-title {
+    color: var(--gold-bright);
+  }
+
+  .scenario-option:has(input:checked) .scenario-desc,
+  .scenario-option.is-checked .scenario-desc {
+    color: rgba(250, 246, 238, 0.7);
+  }
+
+  .scenario-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .scenario-title {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--ink);
+    transition: color 0.15s;
+    line-height: 1.3;
+  }
+
+  .scenario-desc {
+    font-size: 12px;
+    color: var(--ink-muted);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    transition: color 0.15s;
+    line-height: 1.4;
+  }
+
+  .loans-table {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .loan-row {
+    display: grid;
+    grid-template-columns: 1.1fr 1.4fr 1.4fr 1.6fr 32px;
+    gap: 8px;
+    align-items: center;
+    background: var(--paper);
+    border: 1px solid var(--rule);
+    padding: 8px;
+  }
+
+  .loan-row input[type="text"],
+  .loan-row select {
+    font-size: 13px;
+    padding: 8px 10px;
+    margin: 0;
+    border: 1px solid var(--rule-strong);
+    background: #fff;
+    font-family: inherit;
+  }
+
+  .loan-row .loan-amount-wrap,
+  .loan-row .loan-charged-wrap {
+    position: relative;
+  }
+
+  .loan-row .loan-amount-wrap input,
+  .loan-row .loan-charged-wrap input {
+    padding-left: 22px;
+    width: 100%;
+  }
+
+  .loan-row .loan-amount-wrap::before,
+  .loan-row .loan-charged-wrap::before {
+    content: '$';
+    position: absolute;
+    left: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--ink-muted);
+    font-size: 13px;
+    pointer-events: none;
+  }
+
+  .loan-row .remove-row-btn {
+    background: transparent;
+    border: 1px solid var(--rule-strong);
+    color: var(--ink-muted);
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0;
+    transition: all 0.15s;
+  }
+
+  .loan-row .remove-row-btn:hover {
+    background: var(--error, #c0392b);
+    color: #fff;
+    border-color: var(--error, #c0392b);
+  }
+
+  .loan-row.row-restored {
+    opacity: 0.5;
+  }
+
+  .loans-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .add-row-btn {
+    background: transparent;
+    border: 1px dashed var(--rule-strong);
+    color: var(--navy-deepest);
+    padding: 8px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s;
+  }
+
+  .add-row-btn:hover {
+    background: var(--navy-deepest);
+    color: var(--paper);
+    border-style: solid;
+  }
+
+  .loans-summary {
+    font-size: 13px;
+    color: var(--ink);
+    text-align: right;
+  }
+
+  .loans-summary strong {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+  }
+
+  .loans-summary .micro {
+    display: block;
+    font-size: 11px;
+    color: var(--ink-muted);
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+    margin-top: 2px;
+  }
+
+  @media (max-width: 640px) {
+    .loan-row {
+      grid-template-columns: 1fr 1fr 32px;
+      grid-template-rows: auto auto;
+    }
+    .loan-row .loan-label { grid-column: 1 / 3; }
+    .loan-row select { grid-column: 1 / 3; }
+    .loan-row .remove-row-btn { grid-row: 2; grid-column: 3; align-self: end; }
+  }
+
+  .checkbox-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 10px 0;
+    cursor: pointer;
+  }
+
+  .checkbox-row input[type="checkbox"] {
+    margin-top: 2px;
+    accent-color: var(--navy-deepest);
+    cursor: pointer;
+    width: 16px;
+    height: 16px;
+  }
+
+  .checkbox-row .check-content {
+    flex: 1;
+  }
+
+  .checkbox-row .check-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink);
+    display: block;
+  }
+
+  .checkbox-row .check-help {
+    font-size: 12px;
+    color: var(--ink-muted);
+    margin-top: 2px;
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+  }
+
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* ============ RESULTS PANEL ============ */
+  .results {
+    background: var(--navy-deepest);
+    color: var(--paper);
+    padding: 40px 36px;
+    position: sticky;
+    top: 88px;
+    border-radius: 16px;
+    box-shadow: 0 12px 40px rgba(10, 22, 40, 0.18), 0 2px 6px rgba(10, 22, 40, 0.08);
+    background-image:
+      radial-gradient(ellipse at top right, rgba(201, 165, 92, 0.18) 0%, transparent 60%),
+      linear-gradient(180deg, var(--navy-deep) 0%, var(--navy-deepest) 100%);
+    overflow: hidden;
+  }
+
+  @media (max-width: 920px) {
+    .results { position: static; padding: 32px 24px; border-radius: 14px; }
+  }
+
+  .results-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  .results-title {
+    font-family: 'Fraunces', serif;
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--paper);
+    margin-bottom: 28px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid rgba(201, 165, 92, 0.25);
+    letter-spacing: -0.01em;
+  }
+
+  .hero-figure {
+    margin-bottom: 28px;
+  }
+
+  .hero-figure-label {
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold);
+    margin-bottom: 8px;
+  }
+
+  .hero-figure-value {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(42px, 6vw, 60px);
+    font-weight: 500;
+    line-height: 1;
+    color: var(--paper);
+    letter-spacing: -0.025em;
+    transition: color 0.3s;
+  }
+
+  .hero-figure-sub {
+    margin-top: 8px;
+    font-size: 13px;
+    color: rgba(250, 246, 238, 0.65);
+    font-style: italic;
+    font-family: 'Fraunces', serif;
+  }
+
+  .breakdown {
+    display: grid;
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+
+  .breakdown-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 14px;
+    border-bottom: 1px dotted rgba(201, 165, 92, 0.2);
+    gap: 16px;
+  }
+
+  .breakdown-row:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+  }
+
+  .breakdown-row.emphasized {
+    border-bottom: 1px solid var(--gold);
+    padding: 14px 0;
+  }
+
+  .breakdown-row.emphasized .breakdown-label {
+    color: var(--gold-bright);
+    font-weight: 600;
+  }
+
+  .breakdown-row.emphasized .breakdown-value {
+    font-weight: 600;
+    color: var(--gold-bright);
+    font-size: 18px;
+  }
+
+  .breakdown-label {
+    font-size: 13px;
+    color: rgba(250, 246, 238, 0.75);
+    flex-shrink: 0;
+  }
+
+  .breakdown-label .micro {
+    display: block;
+    font-size: 11.5px;
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    color: rgba(227, 189, 110, 0.78);
+    margin-top: 3px;
+  }
+
+  .breakdown-value {
+    font-family: 'Fraunces', serif;
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--paper);
+    text-align: right;
+  }
+
+  .breakdown-value.muted {
+    color: rgba(250, 246, 238, 0.5);
+  }
+
+  /* Status pill */
+  .status-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 5px 12px;
+    border: 1px solid var(--gold);
+    border-radius: 100px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--gold-bright);
+    margin-bottom: 16px;
+  }
+
+  .status-pill::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    background: var(--gold);
+    border-radius: 50%;
+  }
+
+  .status-pill.zero-down::before { background: #6ad689; }
+  .status-pill.zero-down { border-color: rgba(106, 214, 137, 0.5); color: #8fe6a7; }
+  .status-pill.zero-down::before { background: #6ad689; box-shadow: 0 0 8px rgba(106, 214, 137, 0.5); }
+
+  /* Workings expand */
+  .workings {
+    margin-top: 24px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(201, 165, 92, 0.2);
+  }
+
+  .workings-toggle {
+    background: none;
+    border: none;
+    color: var(--gold);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    cursor: pointer;
+    padding: 4px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: color 0.15s;
+  }
+
+  .workings-toggle:hover { color: var(--gold-bright); }
+
+  .workings-toggle .arrow {
+    transition: transform 0.2s;
+    display: inline-block;
+  }
+
+  .workings-toggle.open .arrow {
+    transform: rotate(90deg);
+  }
+
+  /* .workings-content rules moved below — uses grid-template-rows for clean transitions */
+
+  .step {
+    display: grid;
+    grid-template-columns: 28px 1fr auto;
+    gap: 12px;
+    padding: 8px 0;
+    align-items: baseline;
+    font-size: 12.5px;
+    color: rgba(250, 246, 238, 0.7);
+  }
+
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--gold);
+    font-weight: 500;
+  }
+
+  .step-desc {
+    line-height: 1.45;
+  }
+
+  .step-val {
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    color: var(--paper);
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .step-val.op { color: var(--gold); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+  /* ============ NOTES ============ */
+  .footnotes {
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 1px solid var(--rule);
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.6;
+    max-width: 920px;
+  }
+
+  .footnotes h3 {
+    font-family: 'Fraunces', serif;
+    font-size: 17px;
+    font-weight: 500;
+    color: var(--navy-deepest);
+    margin-bottom: 12px;
+  }
+
+  .footnotes p { margin-bottom: 10px; }
+  .footnotes p:last-child { margin-bottom: 0; }
+
+  .footnote-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 28px;
+    margin-top: 16px;
+  }
+
+  .footnote-grid .col h4 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--gold-on-paper);
+    margin-bottom: 8px;
+  }
+
+  /* Animation on update */
+  @keyframes flashUpdate {
+    0% { background-color: var(--gold-soft); }
+    100% { background-color: transparent; }
+  }
+
+  .flash {
+    animation: flashUpdate 0.6s ease-out;
+  }
+
+  /* Print friendly */
+  @media print {
+    body { background: white; }
+    .results { background: white; color: var(--ink); }
+    .results-title, .hero-figure-value, .breakdown-value { color: var(--ink); }
+  }
+
+  /* Help button */
+  .help-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    margin-left: 4px;
+    border-radius: 50%;
+    background: var(--rule-strong);
+    color: var(--paper);
+    font-size: 9px;
+    font-weight: 600;
+    font-family: 'JetBrains Mono', monospace;
+    cursor: help;
+    vertical-align: middle;
+    border: none;
+    line-height: 1;
+  }
+
+  .field-label .help-btn:hover {
+    background: var(--navy-deepest);
+  }
+
+  /* ============ Post-review polish ============ */
+
+  :root {
+    /* Darker gold variant for use on the cream paper. Hits 4.7:1 on --paper, passes WCAG AA. */
+    --gold-on-paper: #8a6a1f;
+  }
+
+  /* Framing block — sits between masthead and grid, names the rejection moment. */
+  .framing-block {
+    max-width: 920px;
+    margin: 0 0 64px;
+    padding: 28px 0 4px;
+    border-top: 1px solid var(--rule-strong);
+    position: relative;
+  }
+
+  .framing-block::before {
+    content: '';
+    position: absolute;
+    top: -1px;
+    left: 0;
+    width: 88px;
+    height: 3px;
+    background: var(--navy-deepest);
+  }
+
+  .framing-eyebrow {
+    font-family: 'Fraunces', serif;
+    font-size: 13px;
+    font-weight: 500;
+    font-style: italic;
+    letter-spacing: 0.01em;
+    color: var(--gold-on-paper);
+    margin-bottom: 14px;
+  }
+
+  .framing-headline {
+    font-family: 'Fraunces', serif;
+    font-size: clamp(21px, 2.6vw, 28px);
+    font-weight: 500;
+    line-height: 1.28;
+    letter-spacing: -0.01em;
+    color: var(--navy-deepest);
+    margin-bottom: 14px;
+    max-width: 740px;
+  }
+
+  .framing-headline em {
+    font-style: italic;
+    color: var(--gold-on-paper);
+    font-weight: 600;
+  }
+
+  .framing-body {
+    font-size: 15.5px;
+    line-height: 1.65;
+    color: var(--ink-soft);
+    max-width: 640px;
+  }
+
+  .framing-body strong {
+    color: var(--navy-deepest);
+    font-weight: 600;
+  }
+
+  @media (max-width: 920px) {
+    .framing-block { margin-bottom: 40px; }
+    .framing-body { font-size: 14.5px; }
+  }
+
+  /* Refined byline — no all-caps, larger size, better legibility. */
+  .byline {
+    margin-top: 22px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12.5px;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    color: var(--ink-muted);
+  }
+
+  .byline a {
+    color: var(--navy-deepest);
+    text-decoration: none;
+    border-bottom: 1px solid var(--gold-on-paper);
+    padding-bottom: 1px;
+    transition: border-color 0.2s;
+  }
+
+  .byline a:hover { border-color: var(--navy-deepest); }
+
+  /* Input validation states. */
+  .field-error {
+    display: none;
+    margin-top: 6px;
+    font-size: 12.5px;
+    color: var(--error);
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    line-height: 1.4;
+  }
+
+  .field.has-error .field-error { display: block; }
+
+  .field.has-error input[type="text"],
+  .field.has-error input[type="number"] {
+    border-color: var(--error);
+    box-shadow: 0 0 0 3px rgba(168, 50, 50, 0.12);
+  }
+
+  .field.has-error .input-prefix { color: var(--error); }
+
+  /* Calculation-steps expand: replace max-height layout-property animation with grid-template-rows. */
+  .workings-content {
+    display: grid;
+    grid-template-rows: 0fr;
+    max-height: none;
+    overflow: hidden;
+    transition: grid-template-rows 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .workings-content.open {
+    grid-template-rows: 1fr;
+    padding-top: 16px;
+  }
+
+  .workings-content > * {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* Mobile: enlarge tap area on checkbox / radio rows without changing visible size. */
+  @media (pointer: coarse) {
+    .checkbox-row { padding: 14px 0; min-height: 44px; }
+    .scenario-option { min-height: 56px; padding: 14px; }
+    .toggle-group label { padding: 14px; min-height: 44px; }
+  }
+
+  /* Reduced motion: respect user preference. */
+  @media (prefers-reduced-motion: reduce) {
+    .workings-content,
+    .workings-toggle .arrow,
+    .scenario-option,
+    .byline a,
+    input[type="text"],
+    input[type="number"],
+    select { transition-duration: 0.01ms !important; }
+    .flash { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav" aria-label="Primary">
+  <div class="topnav-inner">
+    <a href="/" class="topnav-brand">VA Entitlement Calculator</a>
+    <div class="topnav-links">
+      <a href="#how-it-works">How it works</a>
+      <a href="#" onclick="document.getElementById('partial-fields')?.scrollIntoView({behavior:'smooth'});return false;">Partial entitlement</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <header class="masthead">
+    <div class="eyebrow">VA Loan Analysis · 2026 Limits</div>
+    <h1 class="title">VA Entitlement <em>Calculator</em></h1>
+    <p class="subtitle">Worksheet-accurate guaranty, max zero-down loan, and required cash-to-close — including partial entitlement, joint-veteran loans, multi-unit limits, and multi-loan COE entry.</p>
+  </header>
+
+  <div class="grid">
+
+    <!-- ============ INPUTS ============ -->
+    <div class="panel">
+
+      <div class="section">
+        <div class="section-label"><span class="num">01</span> Property</div>
+        <h2 class="section-title">Purchase &amp; Value</h2>
+
+        <div class="field">
+          <label class="field-label" for="purchase-price">Purchase price</label>
+          <div class="input-wrap">
+            <span class="input-prefix">$</span>
+            <input type="text" id="purchase-price" class="with-prefix money" inputmode="numeric" value="1,200,000" />
+          </div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="appraised-value">Appraised value (Notice of Value)</label>
+          <div class="input-wrap">
+            <span class="input-prefix">$</span>
+            <input type="text" id="appraised-value" class="with-prefix money" inputmode="numeric" value="1,200,000" aria-describedby="appraised-value-help" />
+          </div>
+          <div class="field-help" id="appraised-value-help">If lower than purchase price, the difference is non-financeable cash.</div>
+        </div>
+
+        <div class="field">
+          <label class="field-label">Property location</label>
+          <div class="field-row">
+            <div>
+              <select id="state-select" aria-label="State" aria-describedby="location-help">
+                <option value="">Select state…</option>
+              </select>
+            </div>
+            <div>
+              <select id="county-select" aria-label="County" aria-describedby="location-help" disabled>
+                <option value="">Select county…</option>
+              </select>
+            </div>
+          </div>
+          <div class="field-help" id="location-help">Select a state and county to auto-fill the 2026 loan limit.</div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="units-select">Number of units</label>
+          <select id="units-select" aria-describedby="units-help">
+            <option value="1" selected>1-unit (single-family)</option>
+            <option value="2">2-unit (duplex)</option>
+            <option value="3">3-unit (triplex)</option>
+            <option value="4">4-unit (fourplex)</option>
+          </select>
+          <div class="field-help" id="units-help">VA requires you occupy one unit as your primary residence. 2–4 unit properties have higher county loan limits. 3–4 unit purchases require 6 months PITI reserves and rental self-sufficiency.</div>
+        </div>
+
+        <div class="field">
+          <label class="field-label" for="county-limit">2026 county loan limit</label>
+          <div class="input-wrap">
+            <span class="input-prefix">$</span>
+            <input type="text" id="county-limit" class="with-prefix money" inputmode="numeric" value="832,750" aria-describedby="limit-source" />
+          </div>
+          <div class="field-help" id="limit-source">Default baseline. Pick a state and county above for the official 2026 figure, or override manually here.</div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label"><span class="num">02</span> Entitlement</div>
+        <h2 class="section-title">Your VA Loan History</h2>
+
+        <div class="field">
+          <label class="field-label">Which describes your situation?</label>
+          <div class="scenario-group">
+            <label class="scenario-option">
+              <input type="radio" name="ent-scenario" value="first-time" checked />
+              <span class="scenario-content">
+                <span class="scenario-title">First-time VA loan use</span>
+                <span class="scenario-desc">Never used a VA loan before. Full entitlement.</span>
+              </span>
+            </label>
+            <label class="scenario-option">
+              <input type="radio" name="ent-scenario" value="restored" />
+              <span class="scenario-content">
+                <span class="scenario-title">Prior VA loan paid off &amp; property sold</span>
+                <span class="scenario-desc">Restored to full entitlement. No limit, no down payment.</span>
+              </span>
+            </label>
+            <label class="scenario-option">
+              <input type="radio" name="ent-scenario" value="active" />
+              <span class="scenario-content">
+                <span class="scenario-title">Active VA loan on another property</span>
+                <span class="scenario-desc">Partial entitlement. County limit applies.</span>
+              </span>
+            </label>
+          </div>
+          <div class="field-help" id="scenario-help">Per the Blue Water Navy Act (Jan 2020), full entitlement = no VA loan limit regardless of price.</div>
+        </div>
+
+        <div id="partial-fields" style="display: none;">
+          <div class="field">
+            <label class="field-label">Prior VA loans (from your COE)</label>
+            <p class="field-help">From the COE table titled "Prior Loans charged to entitlement". Enter every prior loan listed. Charged amount auto-fills as 25% × loan amount, but the COE is the source of truth — override if it differs (it often does for older loans). Status decides if the entitlement still counts: <em>Restored</em> loans are excluded.</p>
+
+            <div id="loans-table" class="loans-table"></div>
+
+            <div class="loans-actions">
+              <button type="button" id="add-loan-btn" class="add-row-btn">+ Add prior loan</button>
+              <div class="loans-summary">
+                Currently charged: <strong id="loans-total-charged">$0</strong>
+                <span class="micro">(Active + Paid-In-Full–Not-Restored only)</span>
+              </div>
+            </div>
+
+            <input type="hidden" id="used-entitlement" value="0" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label"><span class="num">03</span> Borrowers</div>
+        <h2 class="section-title">Joint Borrowers</h2>
+
+        <div class="field">
+          <label class="field-label">Is this a joint VA loan?</label>
+          <div class="toggle-group">
+            <input type="radio" id="joint-no" name="joint" value="no" checked />
+            <label for="joint-no">Single borrower</label>
+            <input type="radio" id="joint-yes" name="joint" value="yes" />
+            <label for="joint-yes">Two veteran borrowers</label>
+          </div>
+          <div class="field-help" id="joint-help">Two veteran-borrowers can pool entitlement on one loan. Each must occupy the property as primary residence. Non-veteran co-borrowers (e.g. non-vet spouse) handled differently — call for those scenarios.</div>
+        </div>
+
+        <div id="joint-fields" style="display: none;">
+          <div class="field">
+            <label class="field-label">Co-borrower's VA loan history</label>
+            <div class="scenario-group">
+              <label class="scenario-option">
+                <input type="radio" name="cob-scenario" value="first-time" checked />
+                <span class="scenario-content">
+                  <span class="scenario-title">First-time or restored full entitlement</span>
+                  <span class="scenario-desc">Co-borrower has full VA entitlement available.</span>
+                </span>
+              </label>
+              <label class="scenario-option">
+                <input type="radio" name="cob-scenario" value="active" />
+                <span class="scenario-content">
+                  <span class="scenario-title">Active VA loan elsewhere</span>
+                  <span class="scenario-desc">Co-borrower has partial entitlement. County limit applies.</span>
+                </span>
+              </label>
+            </div>
+          </div>
+
+          <div class="field" id="cob-partial-fields" style="display: none;">
+            <label class="field-label">Co-borrower's prior VA loans (from their COE)</label>
+            <p class="field-help">Enter each prior loan from co-borrower's COE. Restored loans excluded automatically.</p>
+
+            <div id="cob-loans-table" class="loans-table"></div>
+
+            <div class="loans-actions">
+              <button type="button" id="cob-add-loan-btn" class="add-row-btn">+ Add prior loan</button>
+              <div class="loans-summary">
+                Currently charged: <strong id="cob-loans-total-charged">$0</strong>
+              </div>
+            </div>
+
+            <input type="hidden" id="cob-prior-loan-amount" value="0" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label"><span class="num">04</span> Funding Fee</div>
+        <h2 class="section-title">Fee Tier</h2>
+
+        <div class="field">
+          <label class="field-label">Use of benefit</label>
+          <div class="toggle-group">
+            <input type="radio" id="use-first" name="usage" value="first" checked />
+            <label for="use-first">First use</label>
+            <input type="radio" id="use-subsequent" name="usage" value="subsequent" />
+            <label for="use-subsequent">Subsequent use</label>
+          </div>
+          <div class="field-help" id="usage-help">Auto-set from your VA loan history above. Override if needed (e.g. IRRRL, prior manufactured home loan only).</div>
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="exempt" />
+          <span class="check-content">
+            <span class="check-label">Funding fee exempt</span>
+            <span class="check-help">VA disability rating ≥10%, Purple Heart on active duty, or eligible surviving spouse.</span>
+          </span>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="finance-fee" checked />
+          <span class="check-content">
+            <span class="check-label">Finance the funding fee into the loan</span>
+            <span class="check-help">Most common. Adds the fee to the base loan amount.</span>
+          </span>
+        </label>
+      </div>
+
+    </div>
+
+    <!-- ============ RESULTS ============ -->
+    <div class="results">
+      <div class="results-eyebrow">Output · Live Calculation</div>
+      <h2 class="results-title">Loan Scenario</h2>
+
+      <div id="status-container">
+        <div class="status-pill" id="status-pill">
+          <span id="status-text">Calculating</span>
+        </div>
+      </div>
+
+      <div class="hero-figure">
+        <div class="hero-figure-label">Maximum zero-down loan</div>
+        <div class="hero-figure-value" id="max-loan">—</div>
+        <div class="hero-figure-sub" id="max-loan-sub">—</div>
+      </div>
+
+      <div class="breakdown">
+        <div class="breakdown-row">
+          <span class="breakdown-label">
+            Available entitlement
+            <span class="micro">25% guaranty pool</span>
+          </span>
+          <span class="breakdown-value" id="r-entitlement">—</span>
+        </div>
+
+        <div class="breakdown-row emphasized">
+          <span class="breakdown-label">Required down payment</span>
+          <span class="breakdown-value" id="r-downpayment">—</span>
+        </div>
+
+        <div class="breakdown-row">
+          <span class="breakdown-label">
+            Funding fee
+            <span class="micro" id="r-fee-pct">—</span>
+          </span>
+          <span class="breakdown-value" id="r-fee">—</span>
+        </div>
+
+        <div class="breakdown-row">
+          <span class="breakdown-label">Final loan amount (with fee)</span>
+          <span class="breakdown-value" id="r-final-loan">—</span>
+        </div>
+
+        <div class="breakdown-row">
+          <span class="breakdown-label">
+            Total cash to close
+            <span class="micro">Down payment only — excl. closing costs</span>
+          </span>
+          <span class="breakdown-value" id="r-cash">—</span>
+        </div>
+
+        <div class="breakdown-row">
+          <span class="breakdown-label">Effective guaranty</span>
+          <span class="breakdown-value" id="r-guaranty-pct">—</span>
+        </div>
+      </div>
+
+      <div class="workings">
+        <button class="workings-toggle" id="workings-toggle">
+          <span class="arrow">▸</span>
+          Show calculation steps
+        </button>
+        <div class="workings-content" id="workings-content">
+          <div id="steps"></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footnotes" id="how-it-works">
+    <h3>How this calculation works</h3>
+    <p>The VA guarantees 25% of any loan above $144,000. The "guaranty" is the dollar amount the VA pledges to cover if the borrower defaults — and the lender requires that 25% guaranty (entitlement + down payment) on every loan. Veterans with full entitlement face no VA loan limit because their guaranty pool is unlimited; veterans with partial entitlement are capped at 25% of the county conforming limit.</p>
+
+    <div class="footnote-grid">
+      <div class="col">
+        <h4>Maximum zero-down loan</h4>
+        <p>For partial entitlement: <em>(County limit × 25%) − Used entitlement, divided by 25%.</em> When (entitlement + 25% × purchase price) covers the loan, no down payment is required.</p>
+      </div>
+      <div class="col">
+        <h4>Required down payment</h4>
+        <p>When the purchase price exceeds zero-down capacity, the borrower covers 25% of the gap. Formula: <em>25% × (price − zero-down max).</em></p>
+      </div>
+      <div class="col">
+        <h4>Funding fee (2026)</h4>
+        <p>First use: 2.15% (no down), 1.5% (5–9.99% down), 1.25% (10%+ down). Subsequent use: 3.3% / 1.5% / 1.25%. Disabled veterans and qualifying surviving spouses are exempt.</p>
+      </div>
+    </div>
+
+    <p style="margin-top: 24px; font-size: 12px; color: var(--ink-muted); font-style: italic; font-family: 'Fraunces', serif;">County loan limits sourced from FHFA's 2026 Conforming Loan Limit Values (HERA-based) — exact 1/2/3/4-unit limits per county. Ceiling counties (1-unit $1,249,125; 4-unit $2,402,625) and statutory areas (AK / HI / GU / VI) follow the same HERA structure. 2026 1-unit baseline is $832,750 (2-unit $1,066,250; 3-unit $1,288,800; 4-unit $1,601,750). Verify exact figures at <a href="https://www.fhfa.gov/data/dashboard/conforming-loan-limit-values-map" target="_blank" rel="noopener" style="color: var(--gold-on-paper); font-weight: 600;">fhfa.gov</a> before underwriting. Estimates only. Final loan eligibility, guaranty calculation, and funding fee are determined by VA underwriting based on the Certificate of Eligibility, lender overlays, and current VA Lender's Handbook (Chapter 3 / Chapter 7) procedures. This tool does not constitute a loan commitment.</p>
+  </div>
+
+</div>
+
+<footer style="background:var(--navy-deepest);color:rgba(250,246,238,0.55);padding:40px 32px 32px;margin-top:0;font-family:'Inter',system-ui,sans-serif;">
+  <div style="max-width:1180px;margin:0 auto;text-align:center;">
+    <div style="font-size:11px;line-height:1.85;color:rgba(250,246,238,0.55);max-width:780px;margin:0 auto;">
+      Estimates only. Not a commitment to lend, pre-approval, or offer of credit. Final loan eligibility, guaranty calculation, and funding fee are determined by VA underwriting based on the Certificate of Eligibility, lender overlays, and current VA Lender's Handbook (Chapter 3 / Chapter 7). Equal Housing Opportunity. Not affiliated with or endorsed by the U.S. Department of Veterans Affairs or any government agency.
+      All loan programs subject to credit approval and property qualification. Rates, fees, and terms subject to change without notice.<br><br>
+      <a href="https://www.nmlsconsumeraccess.org" target="_blank" rel="noopener" style="color:rgba(250,246,238,0.5);text-decoration:none;border-bottom:1px solid rgba(250,246,238,0.15);">nmlsconsumeraccess.org</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // ===== 2026 FHFA Conforming Loan Limit Data =====
+  // Baseline counties default to $832,750. Override values are explicitly listed.
+  // Source: FHFA 2026 Conforming Loan Limit Values announcement (Nov 2025).
+  const COUNTY_DATA = {"meta":{"baseline":832750,"ceiling":1249125,"year":2026,"source":"FHFA 2026 Conforming Loan Limit Values (HERA-based)","baselines":{"1":832750,"2":1066250,"3":1288800,"4":1601750},"ceilings":{"1":1249125,"2":1599375,"3":1933200,"4":2402625}},"states":{"AK":"Alaska","AL":"Alabama","AR":"Arkansas","AZ":"Arizona","CA":"California","CO":"Colorado","CT":"Connecticut","DC":"District of Columbia","DE":"Delaware","FL":"Florida","GA":"Georgia","GU":"Guam","HI":"Hawaii","IA":"Iowa","ID":"Idaho","IL":"Illinois","IN":"Indiana","KS":"Kansas","KY":"Kentucky","LA":"Louisiana","MA":"Massachusetts","MD":"Maryland","ME":"Maine","MI":"Michigan","MN":"Minnesota","MO":"Missouri","MS":"Mississippi","MT":"Montana","NC":"North Carolina","ND":"North Dakota","NE":"Nebraska","NH":"New Hampshire","NJ":"New Jersey","NM":"New Mexico","NV":"Nevada","NY":"New York","OH":"Ohio","OK":"Oklahoma","OR":"Oregon","PA":"Pennsylvania","PR":"Puerto Rico","RI":"Rhode Island","SC":"South Carolina","SD":"South Dakota","TN":"Tennessee","TX":"Texas","UT":"Utah","VA":"Virginia","VI":"U.S. Virgin Islands","VT":"Vermont","WA":"Washington","WI":"Wisconsin","WV":"West Virginia","WY":"Wyoming"},"counties":{"AK":[["Aleutians East Borough",1249125,1599375,1933200,2402625],["Aleutians West Census Area",1249125,1599375,1933200,2402625],["Anchorage Municipality",1249125,1599375,1933200,2402625],["Bethel Census Area",1249125,1599375,1933200,2402625],["Bristol Bay Borough",1249125,1599375,1933200,2402625],["Chugach Census Area",1249125,1599375,1933200,2402625],["Copper River Census Area",1249125,1599375,1933200,2402625],["Denali Borough",1249125,1599375,1933200,2402625],["Dillingham Census Area",1249125,1599375,1933200,2402625],["Fairbanks North Star Borough",1249125,1599375,1933200,2402625],["Haines Borough",1249125,1599375,1933200,2402625],["Hoonah-Angoon Census Area",1249125,1599375,1933200,2402625],["Juneau City and Borough",1249125,1599375,1933200,2402625],["Kenai Peninsula Borough",1249125,1599375,1933200,2402625],["Ketchikan Gateway Borough",1249125,1599375,1933200,2402625],["Kodiak Island Borough",1249125,1599375,1933200,2402625],["Kusilvak Census Area",1249125,1599375,1933200,2402625],["Lake and Peninsula Borough",1249125,1599375,1933200,2402625],["Matanuska-Susitna Borough",1249125,1599375,1933200,2402625],["Nome Census Area",1249125,1599375,1933200,2402625],["North Slope Borough",1249125,1599375,1933200,2402625],["Northwest Arctic Borough",1249125,1599375,1933200,2402625],["Petersburg Census Area",1249125,1599375,1933200,2402625],["Prince of Wales-Hyder Census Area",1249125,1599375,1933200,2402625],["Sitka City and Borough",1249125,1599375,1933200,2402625],["Skagway Municipality",1249125,1599375,1933200,2402625],["Southeast Fairbanks Census Area",1249125,1599375,1933200,2402625],["Wrangell City and Borough",1249125,1599375,1933200,2402625],["Yakutat City and Borough",1249125,1599375,1933200,2402625],["Yukon-Koyukuk Census Area",1249125,1599375,1933200,2402625]],"AL":[["Autauga County",null,null,null,null],["Baldwin County",null,null,null,null],["Barbour County",null,null,null,null],["Bibb County",null,null,null,null],["Blount County",null,null,null,null],["Bullock County",null,null,null,null],["Butler County",null,null,null,null],["Calhoun County",null,null,null,null],["Chambers County",null,null,null,null],["Cherokee County",null,null,null,null],["Chilton County",null,null,null,null],["Choctaw County",null,null,null,null],["Clarke County",null,null,null,null],["Clay County",null,null,null,null],["Cleburne County",null,null,null,null],["Coffee County",null,null,null,null],["Colbert County",null,null,null,null],["Conecuh County",null,null,null,null],["Coosa County",null,null,null,null],["Covington County",null,null,null,null],["Crenshaw County",null,null,null,null],["Cullman County",null,null,null,null],["Dale County",null,null,null,null],["Dallas County",null,null,null,null],["DeKalb County",null,null,null,null],["Elmore County",null,null,null,null],["Escambia County",null,null,null,null],["Etowah County",null,null,null,null],["Fayette County",null,null,null,null],["Franklin County",null,null,null,null],["Geneva County",null,null,null,null],["Greene County",null,null,null,null],["Hale County",null,null,null,null],["Henry County",null,null,null,null],["Houston County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Lamar County",null,null,null,null],["Lauderdale County",null,null,null,null],["Lawrence County",null,null,null,null],["Lee County",null,null,null,null],["Limestone County",null,null,null,null],["Lowndes County",null,null,null,null],["Macon County",null,null,null,null],["Madison County",null,null,null,null],["Marengo County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Mobile County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["Perry County",null,null,null,null],["Pickens County",null,null,null,null],["Pike County",null,null,null,null],["Randolph County",null,null,null,null],["Russell County",null,null,null,null],["Shelby County",null,null,null,null],["St. Clair County",null,null,null,null],["Sumter County",null,null,null,null],["Talladega County",null,null,null,null],["Tallapoosa County",null,null,null,null],["Tuscaloosa County",null,null,null,null],["Walker County",null,null,null,null],["Washington County",null,null,null,null],["Wilcox County",null,null,null,null],["Winston County",null,null,null,null]],"AR":[["Arkansas County",null,null,null,null],["Ashley County",null,null,null,null],["Baxter County",null,null,null,null],["Benton County",null,null,null,null],["Boone County",null,null,null,null],["Bradley County",null,null,null,null],["Calhoun County",null,null,null,null],["Carroll County",null,null,null,null],["Chicot County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Cleburne County",null,null,null,null],["Cleveland County",null,null,null,null],["Columbia County",null,null,null,null],["Conway County",null,null,null,null],["Craighead County",null,null,null,null],["Crawford County",null,null,null,null],["Crittenden County",null,null,null,null],["Cross County",null,null,null,null],["Dallas County",null,null,null,null],["Desha County",null,null,null,null],["Drew County",null,null,null,null],["Faulkner County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Garland County",null,null,null,null],["Grant County",null,null,null,null],["Greene County",null,null,null,null],["Hempstead County",null,null,null,null],["Hot Spring County",null,null,null,null],["Howard County",null,null,null,null],["Independence County",null,null,null,null],["Izard County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Johnson County",null,null,null,null],["Lafayette County",null,null,null,null],["Lawrence County",null,null,null,null],["Lee County",null,null,null,null],["Lincoln County",null,null,null,null],["Little River County",null,null,null,null],["Logan County",null,null,null,null],["Lonoke County",null,null,null,null],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["Miller County",null,null,null,null],["Mississippi County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Nevada County",null,null,null,null],["Newton County",null,null,null,null],["Ouachita County",null,null,null,null],["Perry County",null,null,null,null],["Phillips County",null,null,null,null],["Pike County",null,null,null,null],["Poinsett County",null,null,null,null],["Polk County",null,null,null,null],["Pope County",null,null,null,null],["Prairie County",null,null,null,null],["Pulaski County",null,null,null,null],["Randolph County",null,null,null,null],["Saline County",null,null,null,null],["Scott County",null,null,null,null],["Searcy County",null,null,null,null],["Sebastian County",null,null,null,null],["Sevier County",null,null,null,null],["Sharp County",null,null,null,null],["St. Francis County",null,null,null,null],["Stone County",null,null,null,null],["Union County",null,null,null,null],["Van Buren County",null,null,null,null],["Washington County",null,null,null,null],["White County",null,null,null,null],["Woodruff County",null,null,null,null],["Yell County",null,null,null,null]],"AZ":[["Apache County",null,null,null,null],["Cochise County",null,null,null,null],["Coconino County",null,null,null,null],["Gila County",null,null,null,null],["Graham County",null,null,null,null],["Greenlee County",null,null,null,null],["La Paz County",null,null,null,null],["Maricopa County",null,null,null,null],["Mohave County",null,null,null,null],["Navajo County",null,null,null,null],["Pima County",null,null,null,null],["Pinal County",null,null,null,null],["Santa Cruz County",null,null,null,null],["Yavapai County",null,null,null,null],["Yuma County",null,null,null,null]],"CA":[["Alameda County",1249125,1599375,1933200,2402625],["Alpine County",null,null,null,null],["Amador County",null,null,null,null],["Butte County",null,null,null,null],["Calaveras County",null,null,null,null],["Colusa County",null,null,null,null],["Contra Costa County",1249125,1599375,1933200,2402625],["Del Norte County",null,null,null,null],["El Dorado County",null,null,null,null],["Fresno County",null,null,null,null],["Glenn County",null,null,null,null],["Humboldt County",null,null,null,null],["Imperial County",null,null,null,null],["Inyo County",null,null,null,null],["Kern County",null,null,null,null],["Kings County",null,null,null,null],["Lake County",null,null,null,null],["Lassen County",null,null,null,null],["Los Angeles County",1249125,1599375,1933200,2402625],["Madera County",null,null,null,null],["Marin County",1249125,1599375,1933200,2402625],["Mariposa County",null,null,null,null],["Mendocino County",null,null,null,null],["Merced County",null,null,null,null],["Modoc County",null,null,null,null],["Mono County",null,null,null,null],["Monterey County",994750,1273450,1539350,1913000],["Napa County",1017750,1302900,1574900,1957250],["Nevada County",null,null,null,null],["Orange County",1249125,1599375,1933200,2402625],["Placer County",null,null,null,null],["Plumas County",null,null,null,null],["Riverside County",null,null,null,null],["Sacramento County",null,null,null,null],["San Benito County",1249125,1599375,1933200,2402625],["San Bernardino County",null,null,null,null],["San Diego County",1104000,1413350,1708400,2123100],["San Francisco County",1249125,1599375,1933200,2402625],["San Joaquin County",null,null,null,null],["San Luis Obispo County",1000500,1280850,1548250,1924100],["San Mateo County",1249125,1599375,1933200,2402625],["Santa Barbara County",941850,1205750,1457450,1811300],["Santa Clara County",1249125,1599375,1933200,2402625],["Santa Cruz County",1249125,1599375,1933200,2402625],["Shasta County",null,null,null,null],["Sierra County",null,null,null,null],["Siskiyou County",null,null,null,null],["Solano County",null,null,null,null],["Sonoma County",897000,1148350,1388050,1725050],["Stanislaus County",null,null,null,null],["Sutter County",null,null,null,null],["Tehama County",null,null,null,null],["Trinity County",null,null,null,null],["Tulare County",null,null,null,null],["Tuolumne County",null,null,null,null],["Ventura County",1035000,1325000,1601600,1990450],["Yolo County",null,null,null,null],["Yuba County",null,null,null,null]],"CO":[["Adams County",862500,1104150,1334700,1658700],["Alamosa County",null,null,null,null],["Arapahoe County",862500,1104150,1334700,1658700],["Archuleta County",null,null,null,null],["Baca County",null,null,null,null],["Bent County",null,null,null,null],["Boulder County",879750,1126250,1361350,1691850],["Broomfield County",862500,1104150,1334700,1658700],["Chaffee County",null,null,null,null],["Cheyenne County",null,null,null,null],["Clear Creek County",862500,1104150,1334700,1658700],["Conejos County",null,null,null,null],["Costilla County",null,null,null,null],["Crowley County",null,null,null,null],["Custer County",null,null,null,null],["Delta County",null,null,null,null],["Denver County",862500,1104150,1334700,1658700],["Dolores County",null,null,null,null],["Douglas County",862500,1104150,1334700,1658700],["Eagle County",1249125,1599375,1933200,2402625],["El Paso County",null,null,null,null],["Elbert County",862500,1104150,1334700,1658700],["Fremont County",null,null,null,null],["Garfield County",1209750,1548975,1872225,2326875],["Gilpin County",862500,1104150,1334700,1658700],["Grand County",883200,1130650,1366700,1698500],["Gunnison County",null,null,null,null],["Hinsdale County",null,null,null,null],["Huerfano County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",862500,1104150,1334700,1658700],["Kiowa County",null,null,null,null],["Kit Carson County",null,null,null,null],["La Plata County",null,null,null,null],["Lake County",1092500,1398600,1690600,2101000],["Larimer County",null,null,null,null],["Las Animas County",null,null,null,null],["Lincoln County",null,null,null,null],["Logan County",null,null,null,null],["Mesa County",null,null,null,null],["Mineral County",null,null,null,null],["Moffat County",1089050,1394200,1685250,2094350],["Montezuma County",null,null,null,null],["Montrose County",null,null,null,null],["Morgan County",null,null,null,null],["Otero County",null,null,null,null],["Ouray County",null,null,null,null],["Park County",862500,1104150,1334700,1658700],["Phillips County",null,null,null,null],["Pitkin County",1209750,1548975,1872225,2326875],["Prowers County",null,null,null,null],["Pueblo County",null,null,null,null],["Rio Blanco County",null,null,null,null],["Rio Grande County",null,null,null,null],["Routt County",1089050,1394200,1685250,2094350],["Saguache County",null,null,null,null],["San Juan County",null,null,null,null],["San Miguel County",994750,1273450,1539350,1913000],["Sedgwick County",null,null,null,null],["Summit County",1092500,1398600,1690600,2101000],["Teller County",null,null,null,null],["Washington County",null,null,null,null],["Weld County",null,null,null,null],["Yuma County",null,null,null,null]],"CT":[["Capitol Planning Region",null,null,null,null],["Greater Bridgeport Planning Region",977500,1251400,1512650,1879850],["Lower Connecticut River Valley Planning Region",null,null,null,null],["Naugatuck Valley Planning Region",851000,1089450,1316900,1636550],["Northeastern Connecticut Planning Region",null,null,null,null],["Northwest Hills Planning Region",null,null,null,null],["South Central Connecticut Planning Region",null,null,null,null],["Southeastern Connecticut Planning Region",null,null,null,null],["Western Connecticut Planning Region",977500,1251400,1512650,1879850]],"DC":[["District of Columbia",1249125,1599375,1933200,2402625]],"DE":[["Kent County",null,null,null,null],["New Castle County",null,null,null,null],["Sussex County",null,null,null,null]],"FL":[["Alachua County",null,null,null,null],["Baker County",null,null,null,null],["Bay County",null,null,null,null],["Bradford County",null,null,null,null],["Brevard County",null,null,null,null],["Broward County",null,null,null,null],["Calhoun County",null,null,null,null],["Charlotte County",null,null,null,null],["Citrus County",null,null,null,null],["Clay County",null,null,null,null],["Collier County",null,null,null,null],["Columbia County",null,null,null,null],["DeSoto County",null,null,null,null],["Dixie County",null,null,null,null],["Duval County",null,null,null,null],["Escambia County",null,null,null,null],["Flagler County",null,null,null,null],["Franklin County",null,null,null,null],["Gadsden County",null,null,null,null],["Gilchrist County",null,null,null,null],["Glades County",null,null,null,null],["Gulf County",null,null,null,null],["Hamilton County",null,null,null,null],["Hardee County",null,null,null,null],["Hendry County",null,null,null,null],["Hernando County",null,null,null,null],["Highlands County",null,null,null,null],["Hillsborough County",null,null,null,null],["Holmes County",null,null,null,null],["Indian River County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Lafayette County",null,null,null,null],["Lake County",null,null,null,null],["Lee County",null,null,null,null],["Leon County",null,null,null,null],["Levy County",null,null,null,null],["Liberty County",null,null,null,null],["Madison County",null,null,null,null],["Manatee County",null,null,null,null],["Marion County",null,null,null,null],["Martin County",null,null,null,null],["Miami-Dade County",null,null,null,null],["Monroe County",990150,1267600,1532200,1904150],["Nassau County",null,null,null,null],["Okaloosa County",null,null,null,null],["Okeechobee County",null,null,null,null],["Orange County",null,null,null,null],["Osceola County",null,null,null,null],["Palm Beach County",null,null,null,null],["Pasco County",null,null,null,null],["Pinellas County",null,null,null,null],["Polk County",null,null,null,null],["Putnam County",null,null,null,null],["Santa Rosa County",null,null,null,null],["Sarasota County",null,null,null,null],["Seminole County",null,null,null,null],["St. Johns County",null,null,null,null],["St. Lucie County",null,null,null,null],["Sumter County",null,null,null,null],["Suwannee County",null,null,null,null],["Taylor County",null,null,null,null],["Union County",null,null,null,null],["Volusia County",null,null,null,null],["Wakulla County",null,null,null,null],["Walton County",null,null,null,null],["Washington County",null,null,null,null]],"GA":[["Appling County",null,null,null,null],["Atkinson County",null,null,null,null],["Bacon County",null,null,null,null],["Baker County",null,null,null,null],["Baldwin County",null,null,null,null],["Banks County",null,null,null,null],["Barrow County",null,null,null,null],["Bartow County",null,null,null,null],["Ben Hill County",null,null,null,null],["Berrien County",null,null,null,null],["Bibb County",null,null,null,null],["Bleckley County",null,null,null,null],["Brantley County",null,null,null,null],["Brooks County",null,null,null,null],["Bryan County",null,null,null,null],["Bulloch County",null,null,null,null],["Burke County",null,null,null,null],["Butts County",null,null,null,null],["Calhoun County",null,null,null,null],["Camden County",null,null,null,null],["Candler County",null,null,null,null],["Carroll County",null,null,null,null],["Catoosa County",null,null,null,null],["Charlton County",null,null,null,null],["Chatham County",null,null,null,null],["Chattahoochee County",null,null,null,null],["Chattooga County",null,null,null,null],["Cherokee County",null,null,null,null],["Clarke County",null,null,null,null],["Clay County",null,null,null,null],["Clayton County",null,null,null,null],["Clinch County",null,null,null,null],["Cobb County",null,null,null,null],["Coffee County",null,null,null,null],["Colquitt County",null,null,null,null],["Columbia County",null,null,null,null],["Cook County",null,null,null,null],["Coweta County",null,null,null,null],["Crawford County",null,null,null,null],["Crisp County",null,null,null,null],["Dade County",null,null,null,null],["Dawson County",null,null,null,null],["DeKalb County",null,null,null,null],["Decatur County",null,null,null,null],["Dodge County",null,null,null,null],["Dooly County",null,null,null,null],["Dougherty County",null,null,null,null],["Douglas County",null,null,null,null],["Early County",null,null,null,null],["Echols County",null,null,null,null],["Effingham County",null,null,null,null],["Elbert County",null,null,null,null],["Emanuel County",null,null,null,null],["Evans County",null,null,null,null],["Fannin County",null,null,null,null],["Fayette County",null,null,null,null],["Floyd County",null,null,null,null],["Forsyth County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Gilmer County",null,null,null,null],["Glascock County",null,null,null,null],["Glynn County",null,null,null,null],["Gordon County",null,null,null,null],["Grady County",null,null,null,null],["Greene County",null,null,null,null],["Gwinnett County",null,null,null,null],["Habersham County",null,null,null,null],["Hall County",null,null,null,null],["Hancock County",null,null,null,null],["Haralson County",null,null,null,null],["Harris County",null,null,null,null],["Hart County",null,null,null,null],["Heard County",null,null,null,null],["Henry County",null,null,null,null],["Houston County",null,null,null,null],["Irwin County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jeff Davis County",null,null,null,null],["Jefferson County",null,null,null,null],["Jenkins County",null,null,null,null],["Johnson County",null,null,null,null],["Jones County",null,null,null,null],["Lamar County",null,null,null,null],["Lanier County",null,null,null,null],["Laurens County",null,null,null,null],["Lee County",null,null,null,null],["Liberty County",null,null,null,null],["Lincoln County",null,null,null,null],["Long County",null,null,null,null],["Lowndes County",null,null,null,null],["Lumpkin County",null,null,null,null],["Macon County",null,null,null,null],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["McDuffie County",null,null,null,null],["McIntosh County",null,null,null,null],["Meriwether County",null,null,null,null],["Miller County",null,null,null,null],["Mitchell County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["Murray County",null,null,null,null],["Muscogee County",null,null,null,null],["Newton County",null,null,null,null],["Oconee County",null,null,null,null],["Oglethorpe County",null,null,null,null],["Paulding County",null,null,null,null],["Peach County",null,null,null,null],["Pickens County",null,null,null,null],["Pierce County",null,null,null,null],["Pike County",null,null,null,null],["Polk County",null,null,null,null],["Pulaski County",null,null,null,null],["Putnam County",null,null,null,null],["Quitman County",null,null,null,null],["Rabun County",null,null,null,null],["Randolph County",null,null,null,null],["Richmond County",null,null,null,null],["Rockdale County",null,null,null,null],["Schley County",null,null,null,null],["Screven County",null,null,null,null],["Seminole County",null,null,null,null],["Spalding County",null,null,null,null],["Stephens County",null,null,null,null],["Stewart County",null,null,null,null],["Sumter County",null,null,null,null],["Talbot County",null,null,null,null],["Taliaferro County",null,null,null,null],["Tattnall County",null,null,null,null],["Taylor County",null,null,null,null],["Telfair County",null,null,null,null],["Terrell County",null,null,null,null],["Thomas County",null,null,null,null],["Tift County",null,null,null,null],["Toombs County",null,null,null,null],["Towns County",null,null,null,null],["Treutlen County",null,null,null,null],["Troup County",null,null,null,null],["Turner County",null,null,null,null],["Twiggs County",null,null,null,null],["Union County",null,null,null,null],["Upson County",null,null,null,null],["Walker County",null,null,null,null],["Walton County",null,null,null,null],["Ware County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Wheeler County",null,null,null,null],["White County",null,null,null,null],["Whitfield County",null,null,null,null],["Wilcox County",null,null,null,null],["Wilkes County",null,null,null,null],["Wilkinson County",null,null,null,null],["Worth County",null,null,null,null]],"GU":[["Guam",1249125,1599375,1933200,2402625]],"HI":[["Hawaii County",1249125,1599375,1933200,2402625],["Honolulu County",1249125,1599375,1933200,2402625],["Kalawao County",1299500,1663600,2010950,2499100],["Kauai County",1249125,1599375,1933200,2402625],["Maui County",1299500,1663600,2010950,2499100]],"IA":[["Adair County",null,null,null,null],["Adams County",null,null,null,null],["Allamakee County",null,null,null,null],["Appanoose County",null,null,null,null],["Audubon County",null,null,null,null],["Benton County",null,null,null,null],["Black Hawk County",null,null,null,null],["Boone County",null,null,null,null],["Bremer County",null,null,null,null],["Buchanan County",null,null,null,null],["Buena Vista County",null,null,null,null],["Butler County",null,null,null,null],["Calhoun County",null,null,null,null],["Carroll County",null,null,null,null],["Cass County",null,null,null,null],["Cedar County",null,null,null,null],["Cerro Gordo County",null,null,null,null],["Cherokee County",null,null,null,null],["Chickasaw County",null,null,null,null],["Clarke County",null,null,null,null],["Clay County",null,null,null,null],["Clayton County",null,null,null,null],["Clinton County",null,null,null,null],["Crawford County",null,null,null,null],["Dallas County",null,null,null,null],["Davis County",null,null,null,null],["Decatur County",null,null,null,null],["Delaware County",null,null,null,null],["Des Moines County",null,null,null,null],["Dickinson County",null,null,null,null],["Dubuque County",null,null,null,null],["Emmet County",null,null,null,null],["Fayette County",null,null,null,null],["Floyd County",null,null,null,null],["Franklin County",null,null,null,null],["Fremont County",null,null,null,null],["Greene County",null,null,null,null],["Grundy County",null,null,null,null],["Guthrie County",null,null,null,null],["Hamilton County",null,null,null,null],["Hancock County",null,null,null,null],["Hardin County",null,null,null,null],["Harrison County",null,null,null,null],["Henry County",null,null,null,null],["Howard County",null,null,null,null],["Humboldt County",null,null,null,null],["Ida County",null,null,null,null],["Iowa County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jefferson County",null,null,null,null],["Johnson County",null,null,null,null],["Jones County",null,null,null,null],["Keokuk County",null,null,null,null],["Kossuth County",null,null,null,null],["Lee County",null,null,null,null],["Linn County",null,null,null,null],["Louisa County",null,null,null,null],["Lucas County",null,null,null,null],["Lyon County",null,null,null,null],["Madison County",null,null,null,null],["Mahaska County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Mills County",null,null,null,null],["Mitchell County",null,null,null,null],["Monona County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Muscatine County",null,null,null,null],["O'Brien County",null,null,null,null],["Osceola County",null,null,null,null],["Page County",null,null,null,null],["Palo Alto County",null,null,null,null],["Plymouth County",null,null,null,null],["Pocahontas County",null,null,null,null],["Polk County",null,null,null,null],["Pottawattamie County",null,null,null,null],["Poweshiek County",null,null,null,null],["Ringgold County",null,null,null,null],["Sac County",null,null,null,null],["Scott County",null,null,null,null],["Shelby County",null,null,null,null],["Sioux County",null,null,null,null],["Story County",null,null,null,null],["Tama County",null,null,null,null],["Taylor County",null,null,null,null],["Union County",null,null,null,null],["Van Buren County",null,null,null,null],["Wapello County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Winnebago County",null,null,null,null],["Winneshiek County",null,null,null,null],["Woodbury County",null,null,null,null],["Worth County",null,null,null,null],["Wright County",null,null,null,null]],"ID":[["Ada County",null,null,null,null],["Adams County",null,null,null,null],["Bannock County",null,null,null,null],["Bear Lake County",null,null,null,null],["Benewah County",null,null,null,null],["Bingham County",null,null,null,null],["Blaine County",null,null,null,null],["Boise County",null,null,null,null],["Bonner County",null,null,null,null],["Bonneville County",null,null,null,null],["Boundary County",null,null,null,null],["Butte County",null,null,null,null],["Camas County",null,null,null,null],["Canyon County",null,null,null,null],["Caribou County",null,null,null,null],["Cassia County",null,null,null,null],["Clark County",null,null,null,null],["Clearwater County",null,null,null,null],["Custer County",null,null,null,null],["Elmore County",null,null,null,null],["Franklin County",null,null,null,null],["Fremont County",null,null,null,null],["Gem County",null,null,null,null],["Gooding County",null,null,null,null],["Idaho County",null,null,null,null],["Jefferson County",null,null,null,null],["Jerome County",null,null,null,null],["Kootenai County",null,null,null,null],["Latah County",null,null,null,null],["Lemhi County",null,null,null,null],["Lewis County",null,null,null,null],["Lincoln County",null,null,null,null],["Madison County",null,null,null,null],["Minidoka County",null,null,null,null],["Nez Perce County",null,null,null,null],["Oneida County",null,null,null,null],["Owyhee County",null,null,null,null],["Payette County",null,null,null,null],["Power County",null,null,null,null],["Shoshone County",null,null,null,null],["Teton County",1249125,1599375,1933200,2402625],["Twin Falls County",null,null,null,null],["Valley County",null,null,null,null],["Washington County",null,null,null,null]],"IL":[["Adams County",null,null,null,null],["Alexander County",null,null,null,null],["Bond County",null,null,null,null],["Boone County",null,null,null,null],["Brown County",null,null,null,null],["Bureau County",null,null,null,null],["Calhoun County",null,null,null,null],["Carroll County",null,null,null,null],["Cass County",null,null,null,null],["Champaign County",null,null,null,null],["Christian County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Clinton County",null,null,null,null],["Coles County",null,null,null,null],["Cook County",null,null,null,null],["Crawford County",null,null,null,null],["Cumberland County",null,null,null,null],["De Witt County",null,null,null,null],["DeKalb County",null,null,null,null],["Douglas County",null,null,null,null],["Dupage County",null,null,null,null],["Edgar County",null,null,null,null],["Edwards County",null,null,null,null],["Effingham County",null,null,null,null],["Fayette County",null,null,null,null],["Ford County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Gallatin County",null,null,null,null],["Greene County",null,null,null,null],["Grundy County",null,null,null,null],["Hamilton County",null,null,null,null],["Hancock County",null,null,null,null],["Hardin County",null,null,null,null],["Henderson County",null,null,null,null],["Henry County",null,null,null,null],["Iroquois County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jefferson County",null,null,null,null],["Jersey County",null,null,null,null],["Jo Daviess County",null,null,null,null],["Johnson County",null,null,null,null],["Kane County",null,null,null,null],["Kankakee County",null,null,null,null],["Kendall County",null,null,null,null],["Knox County",null,null,null,null],["LaSalle County",null,null,null,null],["Lake County",null,null,null,null],["Lawrence County",null,null,null,null],["Lee County",null,null,null,null],["Livingston County",null,null,null,null],["Logan County",null,null,null,null],["Macon County",null,null,null,null],["Macoupin County",null,null,null,null],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Mason County",null,null,null,null],["Massac County",null,null,null,null],["McDonough County",null,null,null,null],["McHenry County",null,null,null,null],["McLean County",null,null,null,null],["Menard County",null,null,null,null],["Mercer County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["Moultrie County",null,null,null,null],["Ogle County",null,null,null,null],["Peoria County",null,null,null,null],["Perry County",null,null,null,null],["Piatt County",null,null,null,null],["Pike County",null,null,null,null],["Pope County",null,null,null,null],["Pulaski County",null,null,null,null],["Putnam County",null,null,null,null],["Randolph County",null,null,null,null],["Richland County",null,null,null,null],["Rock Island County",null,null,null,null],["Saline County",null,null,null,null],["Sangamon County",null,null,null,null],["Schuyler County",null,null,null,null],["Scott County",null,null,null,null],["Shelby County",null,null,null,null],["St. Clair County",null,null,null,null],["Stark County",null,null,null,null],["Stephenson County",null,null,null,null],["Tazewell County",null,null,null,null],["Union County",null,null,null,null],["Vermilion County",null,null,null,null],["Wabash County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["White County",null,null,null,null],["Whiteside County",null,null,null,null],["Will County",null,null,null,null],["Williamson County",null,null,null,null],["Winnebago County",null,null,null,null],["Woodford County",null,null,null,null]],"IN":[["Adams County",null,null,null,null],["Allen County",null,null,null,null],["Bartholomew County",null,null,null,null],["Benton County",null,null,null,null],["Blackford County",null,null,null,null],["Boone County",null,null,null,null],["Brown County",null,null,null,null],["Carroll County",null,null,null,null],["Cass County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Clinton County",null,null,null,null],["Crawford County",null,null,null,null],["Daviess County",null,null,null,null],["DeKalb County",null,null,null,null],["Dearborn County",null,null,null,null],["Decatur County",null,null,null,null],["Delaware County",null,null,null,null],["Dubois County",null,null,null,null],["Elkhart County",null,null,null,null],["Fayette County",null,null,null,null],["Floyd County",null,null,null,null],["Fountain County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Gibson County",null,null,null,null],["Grant County",null,null,null,null],["Greene County",null,null,null,null],["Hamilton County",null,null,null,null],["Hancock County",null,null,null,null],["Harrison County",null,null,null,null],["Hendricks County",null,null,null,null],["Henry County",null,null,null,null],["Howard County",null,null,null,null],["Huntington County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jay County",null,null,null,null],["Jefferson County",null,null,null,null],["Jennings County",null,null,null,null],["Johnson County",null,null,null,null],["Knox County",null,null,null,null],["Kosciusko County",null,null,null,null],["LaGrange County",null,null,null,null],["LaPorte County",null,null,null,null],["Lake County",null,null,null,null],["Lawrence County",null,null,null,null],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Martin County",null,null,null,null],["Miami County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["Newton County",null,null,null,null],["Noble County",null,null,null,null],["Ohio County",null,null,null,null],["Orange County",null,null,null,null],["Owen County",null,null,null,null],["Parke County",null,null,null,null],["Perry County",null,null,null,null],["Pike County",null,null,null,null],["Porter County",null,null,null,null],["Posey County",null,null,null,null],["Pulaski County",null,null,null,null],["Putnam County",null,null,null,null],["Randolph County",null,null,null,null],["Ripley County",null,null,null,null],["Rush County",null,null,null,null],["Scott County",null,null,null,null],["Shelby County",null,null,null,null],["Spencer County",null,null,null,null],["St. Joseph County",null,null,null,null],["Starke County",null,null,null,null],["Steuben County",null,null,null,null],["Sullivan County",null,null,null,null],["Switzerland County",null,null,null,null],["Tippecanoe County",null,null,null,null],["Tipton County",null,null,null,null],["Union County",null,null,null,null],["Vanderburgh County",null,null,null,null],["Vermillion County",null,null,null,null],["Vigo County",null,null,null,null],["Wabash County",null,null,null,null],["Warren County",null,null,null,null],["Warrick County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Wells County",null,null,null,null],["White County",null,null,null,null],["Whitley County",null,null,null,null]],"KS":[["Allen County",null,null,null,null],["Anderson County",null,null,null,null],["Atchison County",null,null,null,null],["Barber County",null,null,null,null],["Barton County",null,null,null,null],["Bourbon County",null,null,null,null],["Brown County",null,null,null,null],["Butler County",null,null,null,null],["Chase County",null,null,null,null],["Chautauqua County",null,null,null,null],["Cherokee County",null,null,null,null],["Cheyenne County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Cloud County",null,null,null,null],["Coffey County",null,null,null,null],["Comanche County",null,null,null,null],["Cowley County",null,null,null,null],["Crawford County",null,null,null,null],["Decatur County",null,null,null,null],["Dickinson County",null,null,null,null],["Doniphan County",null,null,null,null],["Douglas County",null,null,null,null],["Edwards County",null,null,null,null],["Elk County",null,null,null,null],["Ellis County",null,null,null,null],["Ellsworth County",null,null,null,null],["Finney County",null,null,null,null],["Ford County",null,null,null,null],["Franklin County",null,null,null,null],["Geary County",null,null,null,null],["Gove County",null,null,null,null],["Graham County",null,null,null,null],["Grant County",null,null,null,null],["Gray County",null,null,null,null],["Greeley County",null,null,null,null],["Greenwood County",null,null,null,null],["Hamilton County",null,null,null,null],["Harper County",null,null,null,null],["Harvey County",null,null,null,null],["Haskell County",null,null,null,null],["Hodgeman County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Jewell County",null,null,null,null],["Johnson County",null,null,null,null],["Kearny County",null,null,null,null],["Kingman County",null,null,null,null],["Kiowa County",null,null,null,null],["Labette County",null,null,null,null],["Lane County",null,null,null,null],["Leavenworth County",null,null,null,null],["Lincoln County",null,null,null,null],["Linn County",null,null,null,null],["Logan County",null,null,null,null],["Lyon County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["McPherson County",null,null,null,null],["Meade County",null,null,null,null],["Miami County",null,null,null,null],["Mitchell County",null,null,null,null],["Montgomery County",null,null,null,null],["Morris County",null,null,null,null],["Morton County",null,null,null,null],["Nemaha County",null,null,null,null],["Neosho County",null,null,null,null],["Ness County",null,null,null,null],["Norton County",null,null,null,null],["Osage County",null,null,null,null],["Osborne County",null,null,null,null],["Ottawa County",null,null,null,null],["Pawnee County",null,null,null,null],["Phillips County",null,null,null,null],["Pottawatomie County",null,null,null,null],["Pratt County",null,null,null,null],["Rawlins County",null,null,null,null],["Reno County",null,null,null,null],["Republic County",null,null,null,null],["Rice County",null,null,null,null],["Riley County",null,null,null,null],["Rooks County",null,null,null,null],["Rush County",null,null,null,null],["Russell County",null,null,null,null],["Saline County",null,null,null,null],["Scott County",null,null,null,null],["Sedgwick County",null,null,null,null],["Seward County",null,null,null,null],["Shawnee County",null,null,null,null],["Sheridan County",null,null,null,null],["Sherman County",null,null,null,null],["Smith County",null,null,null,null],["Stafford County",null,null,null,null],["Stanton County",null,null,null,null],["Stevens County",null,null,null,null],["Sumner County",null,null,null,null],["Thomas County",null,null,null,null],["Trego County",null,null,null,null],["Wabaunsee County",null,null,null,null],["Wallace County",null,null,null,null],["Washington County",null,null,null,null],["Wichita County",null,null,null,null],["Wilson County",null,null,null,null],["Woodson County",null,null,null,null],["Wyandotte County",null,null,null,null]],"KY":[["Adair County",null,null,null,null],["Allen County",null,null,null,null],["Anderson County",null,null,null,null],["Ballard County",null,null,null,null],["Barren County",null,null,null,null],["Bath County",null,null,null,null],["Bell County",null,null,null,null],["Boone County",null,null,null,null],["Bourbon County",null,null,null,null],["Boyd County",null,null,null,null],["Boyle County",null,null,null,null],["Bracken County",null,null,null,null],["Breathitt County",null,null,null,null],["Breckinridge County",null,null,null,null],["Bullitt County",null,null,null,null],["Butler County",null,null,null,null],["Caldwell County",null,null,null,null],["Calloway County",null,null,null,null],["Campbell County",null,null,null,null],["Carlisle County",null,null,null,null],["Carroll County",null,null,null,null],["Carter County",null,null,null,null],["Casey County",null,null,null,null],["Christian County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Clinton County",null,null,null,null],["Crittenden County",null,null,null,null],["Cumberland County",null,null,null,null],["Daviess County",null,null,null,null],["Edmonson County",null,null,null,null],["Elliott County",null,null,null,null],["Estill County",null,null,null,null],["Fayette County",null,null,null,null],["Fleming County",null,null,null,null],["Floyd County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Gallatin County",null,null,null,null],["Garrard County",null,null,null,null],["Grant County",null,null,null,null],["Graves County",null,null,null,null],["Grayson County",null,null,null,null],["Green County",null,null,null,null],["Greenup County",null,null,null,null],["Hancock County",null,null,null,null],["Hardin County",null,null,null,null],["Harlan County",null,null,null,null],["Harrison County",null,null,null,null],["Hart County",null,null,null,null],["Henderson County",null,null,null,null],["Henry County",null,null,null,null],["Hickman County",null,null,null,null],["Hopkins County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Jessamine County",null,null,null,null],["Johnson County",null,null,null,null],["Kenton County",null,null,null,null],["Knott County",null,null,null,null],["Knox County",null,null,null,null],["Larue County",null,null,null,null],["Laurel County",null,null,null,null],["Lawrence County",null,null,null,null],["Lee County",null,null,null,null],["Leslie County",null,null,null,null],["Letcher County",null,null,null,null],["Lewis County",null,null,null,null],["Lincoln County",null,null,null,null],["Livingston County",null,null,null,null],["Logan County",null,null,null,null],["Lyon County",null,null,null,null],["Madison County",null,null,null,null],["Magoffin County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Martin County",null,null,null,null],["Mason County",null,null,null,null],["McCracken County",null,null,null,null],["McCreary County",null,null,null,null],["McLean County",null,null,null,null],["Meade County",null,null,null,null],["Menifee County",null,null,null,null],["Mercer County",null,null,null,null],["Metcalfe County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["Muhlenberg County",null,null,null,null],["Nelson County",null,null,null,null],["Nicholas County",null,null,null,null],["Ohio County",null,null,null,null],["Oldham County",null,null,null,null],["Owen County",null,null,null,null],["Owsley County",null,null,null,null],["Pendleton County",null,null,null,null],["Perry County",null,null,null,null],["Pike County",null,null,null,null],["Powell County",null,null,null,null],["Pulaski County",null,null,null,null],["Robertson County",null,null,null,null],["Rockcastle County",null,null,null,null],["Rowan County",null,null,null,null],["Russell County",null,null,null,null],["Scott County",null,null,null,null],["Shelby County",null,null,null,null],["Simpson County",null,null,null,null],["Spencer County",null,null,null,null],["Taylor County",null,null,null,null],["Todd County",null,null,null,null],["Trigg County",null,null,null,null],["Trimble County",null,null,null,null],["Union County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Whitley County",null,null,null,null],["Wolfe County",null,null,null,null],["Woodford County",null,null,null,null]],"LA":[["Acadia Parish",null,null,null,null],["Allen Parish",null,null,null,null],["Ascension Parish",null,null,null,null],["Assumption Parish",null,null,null,null],["Avoyelles Parish",null,null,null,null],["Beauregard Parish",null,null,null,null],["Bienville Parish",null,null,null,null],["Bossier Parish",null,null,null,null],["Caddo Parish",null,null,null,null],["Calcasieu Parish",null,null,null,null],["Caldwell Parish",null,null,null,null],["Cameron Parish",null,null,null,null],["Catahoula Parish",null,null,null,null],["Claiborne Parish",null,null,null,null],["Concordia Parish",null,null,null,null],["De Soto Parish",null,null,null,null],["East Baton Rouge Parish",null,null,null,null],["East Carroll Parish",null,null,null,null],["East Feliciana Parish",null,null,null,null],["Evangeline Parish",null,null,null,null],["Franklin Parish",null,null,null,null],["Grant Parish",null,null,null,null],["Iberia Parish",null,null,null,null],["Iberville Parish",null,null,null,null],["Jackson Parish",null,null,null,null],["Jefferson Davis Parish",null,null,null,null],["Jefferson Parish",null,null,null,null],["La Salle Parish",null,null,null,null],["Lafayette Parish",null,null,null,null],["Lafourche Parish",null,null,null,null],["Lincoln Parish",null,null,null,null],["Livingston Parish",null,null,null,null],["Madison Parish",null,null,null,null],["Morehouse Parish",null,null,null,null],["Natchitoches Parish",null,null,null,null],["Orleans Parish",null,null,null,null],["Ouachita Parish",null,null,null,null],["Plaquemines Parish",null,null,null,null],["Pointe Coupee Parish",null,null,null,null],["Rapides Parish",null,null,null,null],["Red River Parish",null,null,null,null],["Richland Parish",null,null,null,null],["Sabine Parish",null,null,null,null],["St. Bernard Parish",null,null,null,null],["St. Charles Parish",null,null,null,null],["St. Helena Parish",null,null,null,null],["St. James Parish",null,null,null,null],["St. John the Baptist Parish",null,null,null,null],["St. Landry Parish",null,null,null,null],["St. Martin Parish",null,null,null,null],["St. Mary Parish",null,null,null,null],["St. Tammany Parish",null,null,null,null],["Tangipahoa Parish",null,null,null,null],["Tensas Parish",null,null,null,null],["Terrebonne Parish",null,null,null,null],["Union Parish",null,null,null,null],["Vermilion Parish",null,null,null,null],["Vernon Parish",null,null,null,null],["Washington Parish",null,null,null,null],["Webster Parish",null,null,null,null],["West Baton Rouge Parish",null,null,null,null],["West Carroll Parish",null,null,null,null],["West Feliciana Parish",null,null,null,null],["Winn Parish",null,null,null,null]],"MA":[["Barnstable County",null,null,null,null],["Berkshire County",null,null,null,null],["Bristol County",null,null,null,null],["Dukes County",1249125,1599375,1933200,2402625],["Essex County",962550,1232250,1489500,1851100],["Franklin County",null,null,null,null],["Hampden County",null,null,null,null],["Hampshire County",null,null,null,null],["Middlesex County",962550,1232250,1489500,1851100],["Nantucket County",1249125,1599375,1933200,2402625],["Norfolk County",962550,1232250,1489500,1851100],["Plymouth County",962550,1232250,1489500,1851100],["Suffolk County",962550,1232250,1489500,1851100],["Worcester County",null,null,null,null]],"MD":[["Allegany County",null,null,null,null],["Anne Arundel County",null,null,null,null],["Baltimore County",null,null,null,null],["Baltimore city",null,null,null,null],["Calvert County",1209750,1548975,1872225,2326875],["Caroline County",null,null,null,null],["Carroll County",null,null,null,null],["Cecil County",null,null,null,null],["Charles County",1249125,1599375,1933200,2402625],["Dorchester County",null,null,null,null],["Frederick County",1249125,1599375,1933200,2402625],["Garrett County",null,null,null,null],["Harford County",null,null,null,null],["Howard County",null,null,null,null],["Kent County",null,null,null,null],["Montgomery County",1249125,1599375,1933200,2402625],["Prince George's County",1249125,1599375,1933200,2402625],["Queen Anne's County",null,null,null,null],["Somerset County",null,null,null,null],["St. Mary's County",null,null,null,null],["Talbot County",null,null,null,null],["Washington County",null,null,null,null],["Wicomico County",null,null,null,null],["Worcester County",null,null,null,null]],"ME":[["Androscoggin County",null,null,null,null],["Aroostook County",null,null,null,null],["Cumberland County",null,null,null,null],["Franklin County",null,null,null,null],["Hancock County",null,null,null,null],["Kennebec County",null,null,null,null],["Knox County",null,null,null,null],["Lincoln County",null,null,null,null],["Oxford County",null,null,null,null],["Penobscot County",null,null,null,null],["Piscataquis County",null,null,null,null],["Sagadahoc County",null,null,null,null],["Somerset County",null,null,null,null],["Waldo County",null,null,null,null],["Washington County",null,null,null,null],["York County",null,null,null,null]],"MI":[["Alcona County",null,null,null,null],["Alger County",null,null,null,null],["Allegan County",null,null,null,null],["Alpena County",null,null,null,null],["Antrim County",null,null,null,null],["Arenac County",null,null,null,null],["Baraga County",null,null,null,null],["Barry County",null,null,null,null],["Bay County",null,null,null,null],["Benzie County",null,null,null,null],["Berrien County",null,null,null,null],["Branch County",null,null,null,null],["Calhoun County",null,null,null,null],["Cass County",null,null,null,null],["Charlevoix County",null,null,null,null],["Cheboygan County",null,null,null,null],["Chippewa County",null,null,null,null],["Clare County",null,null,null,null],["Clinton County",null,null,null,null],["Crawford County",null,null,null,null],["Delta County",null,null,null,null],["Dickinson County",null,null,null,null],["Eaton County",null,null,null,null],["Emmet County",null,null,null,null],["Genesee County",null,null,null,null],["Gladwin County",null,null,null,null],["Gogebic County",null,null,null,null],["Grand Traverse County",null,null,null,null],["Gratiot County",null,null,null,null],["Hillsdale County",null,null,null,null],["Houghton County",null,null,null,null],["Huron County",null,null,null,null],["Ingham County",null,null,null,null],["Ionia County",null,null,null,null],["Iosco County",null,null,null,null],["Iron County",null,null,null,null],["Isabella County",null,null,null,null],["Jackson County",null,null,null,null],["Kalamazoo County",null,null,null,null],["Kalkaska County",null,null,null,null],["Kent County",null,null,null,null],["Keweenaw County",null,null,null,null],["Lake County",null,null,null,null],["Lapeer County",null,null,null,null],["Leelanau County",null,null,null,null],["Lenawee County",null,null,null,null],["Livingston County",null,null,null,null],["Luce County",null,null,null,null],["Mackinac County",null,null,null,null],["Macomb County",null,null,null,null],["Manistee County",null,null,null,null],["Marquette County",null,null,null,null],["Mason County",null,null,null,null],["Mecosta County",null,null,null,null],["Menominee County",null,null,null,null],["Midland County",null,null,null,null],["Missaukee County",null,null,null,null],["Monroe County",null,null,null,null],["Montcalm County",null,null,null,null],["Montmorency County",null,null,null,null],["Muskegon County",null,null,null,null],["Newaygo County",null,null,null,null],["Oakland County",null,null,null,null],["Oceana County",null,null,null,null],["Ogemaw County",null,null,null,null],["Ontonagon County",null,null,null,null],["Osceola County",null,null,null,null],["Oscoda County",null,null,null,null],["Otsego County",null,null,null,null],["Ottawa County",null,null,null,null],["Presque Isle County",null,null,null,null],["Roscommon County",null,null,null,null],["Saginaw County",null,null,null,null],["Sanilac County",null,null,null,null],["Schoolcraft County",null,null,null,null],["Shiawassee County",null,null,null,null],["St. Clair County",null,null,null,null],["St. Joseph County",null,null,null,null],["Tuscola County",null,null,null,null],["Van Buren County",null,null,null,null],["Washtenaw County",null,null,null,null],["Wayne County",null,null,null,null],["Wexford County",null,null,null,null]],"MN":[["Aitkin County",null,null,null,null],["Anoka County",null,null,null,null],["Becker County",null,null,null,null],["Beltrami County",null,null,null,null],["Benton County",null,null,null,null],["Big Stone County",null,null,null,null],["Blue Earth County",null,null,null,null],["Brown County",null,null,null,null],["Carlton County",null,null,null,null],["Carver County",null,null,null,null],["Cass County",null,null,null,null],["Chippewa County",null,null,null,null],["Chisago County",null,null,null,null],["Clay County",null,null,null,null],["Clearwater County",null,null,null,null],["Cook County",null,null,null,null],["Cottonwood County",null,null,null,null],["Crow Wing County",null,null,null,null],["Dakota County",null,null,null,null],["Dodge County",null,null,null,null],["Douglas County",null,null,null,null],["Faribault County",null,null,null,null],["Fillmore County",null,null,null,null],["Freeborn County",null,null,null,null],["Goodhue County",null,null,null,null],["Grant County",null,null,null,null],["Hennepin County",null,null,null,null],["Houston County",null,null,null,null],["Hubbard County",null,null,null,null],["Isanti County",null,null,null,null],["Itasca County",null,null,null,null],["Jackson County",null,null,null,null],["Kanabec County",null,null,null,null],["Kandiyohi County",null,null,null,null],["Kittson County",null,null,null,null],["Koochiching County",null,null,null,null],["Lac Qui Parle County",null,null,null,null],["Lake County",null,null,null,null],["Lake of the Woods County",null,null,null,null],["Le Sueur County",null,null,null,null],["Lincoln County",null,null,null,null],["Lyon County",null,null,null,null],["Mahnomen County",null,null,null,null],["Marshall County",null,null,null,null],["Martin County",null,null,null,null],["McLeod County",null,null,null,null],["Meeker County",null,null,null,null],["Mille Lacs County",null,null,null,null],["Morrison County",null,null,null,null],["Mower County",null,null,null,null],["Murray County",null,null,null,null],["Nicollet County",null,null,null,null],["Nobles County",null,null,null,null],["Norman County",null,null,null,null],["Olmsted County",null,null,null,null],["Otter Tail County",null,null,null,null],["Pennington County",null,null,null,null],["Pine County",null,null,null,null],["Pipestone County",null,null,null,null],["Polk County",null,null,null,null],["Pope County",null,null,null,null],["Ramsey County",null,null,null,null],["Red Lake County",null,null,null,null],["Redwood County",null,null,null,null],["Renville County",null,null,null,null],["Rice County",null,null,null,null],["Rock County",null,null,null,null],["Roseau County",null,null,null,null],["Scott County",null,null,null,null],["Sherburne County",null,null,null,null],["Sibley County",null,null,null,null],["St. Louis County",null,null,null,null],["Stearns County",null,null,null,null],["Steele County",null,null,null,null],["Stevens County",null,null,null,null],["Swift County",null,null,null,null],["Todd County",null,null,null,null],["Traverse County",null,null,null,null],["Wabasha County",null,null,null,null],["Wadena County",null,null,null,null],["Waseca County",null,null,null,null],["Washington County",null,null,null,null],["Watonwan County",null,null,null,null],["Wilkin County",null,null,null,null],["Winona County",null,null,null,null],["Wright County",null,null,null,null],["Yellow Medicine County",null,null,null,null]],"MO":[["Adair County",null,null,null,null],["Andrew County",null,null,null,null],["Atchison County",null,null,null,null],["Audrain County",null,null,null,null],["Barry County",null,null,null,null],["Barton County",null,null,null,null],["Bates County",null,null,null,null],["Benton County",null,null,null,null],["Bollinger County",null,null,null,null],["Boone County",null,null,null,null],["Buchanan County",null,null,null,null],["Butler County",null,null,null,null],["Caldwell County",null,null,null,null],["Callaway County",null,null,null,null],["Camden County",null,null,null,null],["Cape Girardeau County",null,null,null,null],["Carroll County",null,null,null,null],["Carter County",null,null,null,null],["Cass County",null,null,null,null],["Cedar County",null,null,null,null],["Chariton County",null,null,null,null],["Christian County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Clinton County",null,null,null,null],["Cole County",null,null,null,null],["Cooper County",null,null,null,null],["Crawford County",null,null,null,null],["Dade County",null,null,null,null],["Dallas County",null,null,null,null],["Daviess County",null,null,null,null],["DeKalb County",null,null,null,null],["Dent County",null,null,null,null],["Douglas County",null,null,null,null],["Dunklin County",null,null,null,null],["Franklin County",null,null,null,null],["Gasconade County",null,null,null,null],["Gentry County",null,null,null,null],["Greene County",null,null,null,null],["Grundy County",null,null,null,null],["Harrison County",null,null,null,null],["Henry County",null,null,null,null],["Hickory County",null,null,null,null],["Holt County",null,null,null,null],["Howard County",null,null,null,null],["Howell County",null,null,null,null],["Iron County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jefferson County",null,null,null,null],["Johnson County",null,null,null,null],["Knox County",null,null,null,null],["Laclede County",null,null,null,null],["Lafayette County",null,null,null,null],["Lawrence County",null,null,null,null],["Lewis County",null,null,null,null],["Lincoln County",null,null,null,null],["Linn County",null,null,null,null],["Livingston County",null,null,null,null],["Macon County",null,null,null,null],["Madison County",null,null,null,null],["Maries County",null,null,null,null],["Marion County",null,null,null,null],["McDonald County",null,null,null,null],["Mercer County",null,null,null,null],["Miller County",null,null,null,null],["Mississippi County",null,null,null,null],["Moniteau County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["New Madrid County",null,null,null,null],["Newton County",null,null,null,null],["Nodaway County",null,null,null,null],["Oregon County",null,null,null,null],["Osage County",null,null,null,null],["Ozark County",null,null,null,null],["Pemiscot County",null,null,null,null],["Perry County",null,null,null,null],["Pettis County",null,null,null,null],["Phelps County",null,null,null,null],["Pike County",null,null,null,null],["Platte County",null,null,null,null],["Polk County",null,null,null,null],["Pulaski County",null,null,null,null],["Putnam County",null,null,null,null],["Ralls County",null,null,null,null],["Randolph County",null,null,null,null],["Ray County",null,null,null,null],["Reynolds County",null,null,null,null],["Ripley County",null,null,null,null],["Saline County",null,null,null,null],["Schuyler County",null,null,null,null],["Scotland County",null,null,null,null],["Scott County",null,null,null,null],["Shannon County",null,null,null,null],["Shelby County",null,null,null,null],["St. Charles County",null,null,null,null],["St. Clair County",null,null,null,null],["St. Francois County",null,null,null,null],["St. Louis County",null,null,null,null],["St. Louis city",null,null,null,null],["Ste. Genevieve County",null,null,null,null],["Stoddard County",null,null,null,null],["Stone County",null,null,null,null],["Sullivan County",null,null,null,null],["Taney County",null,null,null,null],["Texas County",null,null,null,null],["Vernon County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Worth County",null,null,null,null],["Wright County",null,null,null,null]],"MS":[["Adams County",null,null,null,null],["Alcorn County",null,null,null,null],["Amite County",null,null,null,null],["Attala County",null,null,null,null],["Benton County",null,null,null,null],["Bolivar County",null,null,null,null],["Calhoun County",null,null,null,null],["Carroll County",null,null,null,null],["Chickasaw County",null,null,null,null],["Choctaw County",null,null,null,null],["Claiborne County",null,null,null,null],["Clarke County",null,null,null,null],["Clay County",null,null,null,null],["Coahoma County",null,null,null,null],["Copiah County",null,null,null,null],["Covington County",null,null,null,null],["DeSoto County",null,null,null,null],["Forrest County",null,null,null,null],["Franklin County",null,null,null,null],["George County",null,null,null,null],["Greene County",null,null,null,null],["Grenada County",null,null,null,null],["Hancock County",null,null,null,null],["Harrison County",null,null,null,null],["Hinds County",null,null,null,null],["Holmes County",null,null,null,null],["Humphreys County",null,null,null,null],["Issaquena County",null,null,null,null],["Itawamba County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jefferson County",null,null,null,null],["Jefferson Davis County",null,null,null,null],["Jones County",null,null,null,null],["Kemper County",null,null,null,null],["Lafayette County",null,null,null,null],["Lamar County",null,null,null,null],["Lauderdale County",null,null,null,null],["Lawrence County",null,null,null,null],["Leake County",null,null,null,null],["Lee County",null,null,null,null],["Leflore County",null,null,null,null],["Lincoln County",null,null,null,null],["Lowndes County",null,null,null,null],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Neshoba County",null,null,null,null],["Newton County",null,null,null,null],["Noxubee County",null,null,null,null],["Oktibbeha County",null,null,null,null],["Panola County",null,null,null,null],["Pearl River County",null,null,null,null],["Perry County",null,null,null,null],["Pike County",null,null,null,null],["Pontotoc County",null,null,null,null],["Prentiss County",null,null,null,null],["Quitman County",null,null,null,null],["Rankin County",null,null,null,null],["Scott County",null,null,null,null],["Sharkey County",null,null,null,null],["Simpson County",null,null,null,null],["Smith County",null,null,null,null],["Stone County",null,null,null,null],["Sunflower County",null,null,null,null],["Tallahatchie County",null,null,null,null],["Tate County",null,null,null,null],["Tippah County",null,null,null,null],["Tishomingo County",null,null,null,null],["Tunica County",null,null,null,null],["Union County",null,null,null,null],["Walthall County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Wilkinson County",null,null,null,null],["Winston County",null,null,null,null],["Yalobusha County",null,null,null,null],["Yazoo County",null,null,null,null]],"MT":[["Beaverhead County",null,null,null,null],["Big Horn County",null,null,null,null],["Blaine County",null,null,null,null],["Broadwater County",null,null,null,null],["Carbon County",null,null,null,null],["Carter County",null,null,null,null],["Cascade County",null,null,null,null],["Chouteau County",null,null,null,null],["Custer County",null,null,null,null],["Daniels County",null,null,null,null],["Dawson County",null,null,null,null],["Deer Lodge County",null,null,null,null],["Fallon County",null,null,null,null],["Fergus County",null,null,null,null],["Flathead County",null,null,null,null],["Gallatin County",null,null,null,null],["Garfield County",null,null,null,null],["Glacier County",null,null,null,null],["Golden Valley County",null,null,null,null],["Granite County",null,null,null,null],["Hill County",null,null,null,null],["Jefferson County",null,null,null,null],["Judith Basin County",null,null,null,null],["Lake County",null,null,null,null],["Lewis and Clark County",null,null,null,null],["Liberty County",null,null,null,null],["Lincoln County",null,null,null,null],["Madison County",null,null,null,null],["McCone County",null,null,null,null],["Meagher County",null,null,null,null],["Mineral County",null,null,null,null],["Missoula County",null,null,null,null],["Musselshell County",null,null,null,null],["Park County",null,null,null,null],["Petroleum County",null,null,null,null],["Phillips County",null,null,null,null],["Pondera County",null,null,null,null],["Powder River County",null,null,null,null],["Powell County",null,null,null,null],["Prairie County",null,null,null,null],["Ravalli County",null,null,null,null],["Richland County",null,null,null,null],["Roosevelt County",null,null,null,null],["Rosebud County",null,null,null,null],["Sanders County",null,null,null,null],["Sheridan County",null,null,null,null],["Silver Bow County",null,null,null,null],["Stillwater County",null,null,null,null],["Sweet Grass County",null,null,null,null],["Teton County",null,null,null,null],["Toole County",null,null,null,null],["Treasure County",null,null,null,null],["Valley County",null,null,null,null],["Wheatland County",null,null,null,null],["Wibaux County",null,null,null,null],["Yellowstone County",null,null,null,null]],"NC":[["Alamance County",null,null,null,null],["Alexander County",null,null,null,null],["Alleghany County",null,null,null,null],["Anson County",null,null,null,null],["Ashe County",null,null,null,null],["Avery County",null,null,null,null],["Beaufort County",null,null,null,null],["Bertie County",null,null,null,null],["Bladen County",null,null,null,null],["Brunswick County",null,null,null,null],["Buncombe County",null,null,null,null],["Burke County",null,null,null,null],["Cabarrus County",null,null,null,null],["Caldwell County",null,null,null,null],["Camden County",null,null,null,null],["Carteret County",null,null,null,null],["Caswell County",null,null,null,null],["Catawba County",null,null,null,null],["Chatham County",null,null,null,null],["Cherokee County",null,null,null,null],["Chowan County",null,null,null,null],["Clay County",null,null,null,null],["Cleveland County",null,null,null,null],["Columbus County",null,null,null,null],["Craven County",null,null,null,null],["Cumberland County",null,null,null,null],["Currituck County",null,null,null,null],["Dare County",null,null,null,null],["Davidson County",null,null,null,null],["Davie County",null,null,null,null],["Duplin County",null,null,null,null],["Durham County",null,null,null,null],["Edgecombe County",null,null,null,null],["Forsyth County",null,null,null,null],["Franklin County",null,null,null,null],["Gaston County",null,null,null,null],["Gates County",null,null,null,null],["Graham County",null,null,null,null],["Granville County",null,null,null,null],["Greene County",null,null,null,null],["Guilford County",null,null,null,null],["Halifax County",null,null,null,null],["Harnett County",null,null,null,null],["Haywood County",null,null,null,null],["Henderson County",null,null,null,null],["Hertford County",null,null,null,null],["Hoke County",null,null,null,null],["Hyde County",null,null,null,null],["Iredell County",null,null,null,null],["Jackson County",null,null,null,null],["Johnston County",null,null,null,null],["Jones County",null,null,null,null],["Lee County",null,null,null,null],["Lenoir County",null,null,null,null],["Lincoln County",null,null,null,null],["Macon County",null,null,null,null],["Madison County",null,null,null,null],["Martin County",null,null,null,null],["McDowell County",null,null,null,null],["Mecklenburg County",null,null,null,null],["Mitchell County",null,null,null,null],["Montgomery County",null,null,null,null],["Moore County",null,null,null,null],["Nash County",null,null,null,null],["New Hanover County",null,null,null,null],["Northampton County",null,null,null,null],["Onslow County",null,null,null,null],["Orange County",null,null,null,null],["Pamlico County",null,null,null,null],["Pasquotank County",null,null,null,null],["Pender County",null,null,null,null],["Perquimans County",null,null,null,null],["Person County",null,null,null,null],["Pitt County",null,null,null,null],["Polk County",null,null,null,null],["Randolph County",null,null,null,null],["Richmond County",null,null,null,null],["Robeson County",null,null,null,null],["Rockingham County",null,null,null,null],["Rowan County",null,null,null,null],["Rutherford County",null,null,null,null],["Sampson County",null,null,null,null],["Scotland County",null,null,null,null],["Stanly County",null,null,null,null],["Stokes County",null,null,null,null],["Surry County",null,null,null,null],["Swain County",null,null,null,null],["Transylvania County",null,null,null,null],["Tyrrell County",null,null,null,null],["Union County",null,null,null,null],["Vance County",null,null,null,null],["Wake County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Watauga County",null,null,null,null],["Wayne County",null,null,null,null],["Wilkes County",null,null,null,null],["Wilson County",null,null,null,null],["Yadkin County",null,null,null,null],["Yancey County",null,null,null,null]],"ND":[["Adams County",null,null,null,null],["Barnes County",null,null,null,null],["Benson County",null,null,null,null],["Billings County",null,null,null,null],["Bottineau County",null,null,null,null],["Bowman County",null,null,null,null],["Burke County",null,null,null,null],["Burleigh County",null,null,null,null],["Cass County",null,null,null,null],["Cavalier County",null,null,null,null],["Dickey County",null,null,null,null],["Divide County",null,null,null,null],["Dunn County",null,null,null,null],["Eddy County",null,null,null,null],["Emmons County",null,null,null,null],["Foster County",null,null,null,null],["Golden Valley County",null,null,null,null],["Grand Forks County",null,null,null,null],["Grant County",null,null,null,null],["Griggs County",null,null,null,null],["Hettinger County",null,null,null,null],["Kidder County",null,null,null,null],["LaMoure County",null,null,null,null],["Logan County",null,null,null,null],["McHenry County",null,null,null,null],["McIntosh County",null,null,null,null],["McKenzie County",null,null,null,null],["McLean County",null,null,null,null],["Mercer County",null,null,null,null],["Morton County",null,null,null,null],["Mountrail County",null,null,null,null],["Nelson County",null,null,null,null],["Oliver County",null,null,null,null],["Pembina County",null,null,null,null],["Pierce County",null,null,null,null],["Ramsey County",null,null,null,null],["Ransom County",null,null,null,null],["Renville County",null,null,null,null],["Richland County",null,null,null,null],["Rolette County",null,null,null,null],["Sargent County",null,null,null,null],["Sheridan County",null,null,null,null],["Sioux County",null,null,null,null],["Slope County",null,null,null,null],["Stark County",null,null,null,null],["Steele County",null,null,null,null],["Stutsman County",null,null,null,null],["Towner County",null,null,null,null],["Traill County",null,null,null,null],["Walsh County",null,null,null,null],["Ward County",null,null,null,null],["Wells County",null,null,null,null],["Williams County",null,null,null,null]],"NE":[["Adams County",null,null,null,null],["Antelope County",null,null,null,null],["Arthur County",null,null,null,null],["Banner County",null,null,null,null],["Blaine County",null,null,null,null],["Boone County",null,null,null,null],["Box Butte County",null,null,null,null],["Boyd County",null,null,null,null],["Brown County",null,null,null,null],["Buffalo County",null,null,null,null],["Burt County",null,null,null,null],["Butler County",null,null,null,null],["Cass County",null,null,null,null],["Cedar County",null,null,null,null],["Chase County",null,null,null,null],["Cherry County",null,null,null,null],["Cheyenne County",null,null,null,null],["Clay County",null,null,null,null],["Colfax County",null,null,null,null],["Cuming County",null,null,null,null],["Custer County",null,null,null,null],["Dakota County",null,null,null,null],["Dawes County",null,null,null,null],["Dawson County",null,null,null,null],["Deuel County",null,null,null,null],["Dixon County",null,null,null,null],["Dodge County",null,null,null,null],["Douglas County",null,null,null,null],["Dundy County",null,null,null,null],["Fillmore County",null,null,null,null],["Franklin County",null,null,null,null],["Frontier County",null,null,null,null],["Furnas County",null,null,null,null],["Gage County",null,null,null,null],["Garden County",null,null,null,null],["Garfield County",null,null,null,null],["Gosper County",null,null,null,null],["Grant County",null,null,null,null],["Greeley County",null,null,null,null],["Hall County",null,null,null,null],["Hamilton County",null,null,null,null],["Harlan County",null,null,null,null],["Hayes County",null,null,null,null],["Hitchcock County",null,null,null,null],["Holt County",null,null,null,null],["Hooker County",null,null,null,null],["Howard County",null,null,null,null],["Jefferson County",null,null,null,null],["Johnson County",null,null,null,null],["Kearney County",null,null,null,null],["Keith County",null,null,null,null],["Keya Paha County",null,null,null,null],["Kimball County",null,null,null,null],["Knox County",null,null,null,null],["Lancaster County",null,null,null,null],["Lincoln County",null,null,null,null],["Logan County",null,null,null,null],["Loup County",null,null,null,null],["Madison County",null,null,null,null],["McPherson County",null,null,null,null],["Merrick County",null,null,null,null],["Morrill County",null,null,null,null],["Nance County",null,null,null,null],["Nemaha County",null,null,null,null],["Nuckolls County",null,null,null,null],["Otoe County",null,null,null,null],["Pawnee County",null,null,null,null],["Perkins County",null,null,null,null],["Phelps County",null,null,null,null],["Pierce County",null,null,null,null],["Platte County",null,null,null,null],["Polk County",null,null,null,null],["Red Willow County",null,null,null,null],["Richardson County",null,null,null,null],["Rock County",null,null,null,null],["Saline County",null,null,null,null],["Sarpy County",null,null,null,null],["Saunders County",null,null,null,null],["Scotts Bluff County",null,null,null,null],["Seward County",null,null,null,null],["Sheridan County",null,null,null,null],["Sherman County",null,null,null,null],["Sioux County",null,null,null,null],["Stanton County",null,null,null,null],["Thayer County",null,null,null,null],["Thomas County",null,null,null,null],["Thurston County",null,null,null,null],["Valley County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Wheeler County",null,null,null,null],["York County",null,null,null,null]],"NH":[["Belknap County",null,null,null,null],["Carroll County",null,null,null,null],["Cheshire County",null,null,null,null],["Coos County",null,null,null,null],["Grafton County",null,null,null,null],["Hillsborough County",null,null,null,null],["Merrimack County",null,null,null,null],["Rockingham County",962550,1232250,1489500,1851100],["Strafford County",962550,1232250,1489500,1851100],["Sullivan County",null,null,null,null]],"NJ":[["Atlantic County",null,null,null,null],["Bergen County",1209750,1548975,1872225,2326875],["Burlington County",null,null,null,null],["Camden County",null,null,null,null],["Cape May County",null,null,null,null],["Cumberland County",null,null,null,null],["Essex County",1209750,1548975,1872225,2326875],["Gloucester County",null,null,null,null],["Hudson County",1209750,1548975,1872225,2326875],["Hunterdon County",1209750,1548975,1872225,2326875],["Mercer County",null,null,null,null],["Middlesex County",1209750,1548975,1872225,2326875],["Monmouth County",1209750,1548975,1872225,2326875],["Morris County",1209750,1548975,1872225,2326875],["Ocean County",1209750,1548975,1872225,2326875],["Passaic County",1209750,1548975,1872225,2326875],["Salem County",null,null,null,null],["Somerset County",1209750,1548975,1872225,2326875],["Sussex County",1209750,1548975,1872225,2326875],["Union County",1209750,1548975,1872225,2326875],["Warren County",null,null,null,null]],"NM":[["Bernalillo County",null,null,null,null],["Catron County",null,null,null,null],["Chaves County",null,null,null,null],["Cibola County",null,null,null,null],["Colfax County",null,null,null,null],["Curry County",null,null,null,null],["De Baca County",null,null,null,null],["Dona Ana County",null,null,null,null],["Eddy County",null,null,null,null],["Grant County",null,null,null,null],["Guadalupe County",null,null,null,null],["Harding County",null,null,null,null],["Hidalgo County",null,null,null,null],["Lea County",null,null,null,null],["Lincoln County",null,null,null,null],["Los Alamos County",null,null,null,null],["Luna County",null,null,null,null],["McKinley County",null,null,null,null],["Mora County",null,null,null,null],["Otero County",null,null,null,null],["Quay County",null,null,null,null],["Rio Arriba County",null,null,null,null],["Roosevelt County",null,null,null,null],["San Juan County",null,null,null,null],["San Miguel County",null,null,null,null],["Sandoval County",null,null,null,null],["Santa Fe County",null,null,null,null],["Sierra County",null,null,null,null],["Socorro County",null,null,null,null],["Taos County",null,null,null,null],["Torrance County",null,null,null,null],["Union County",null,null,null,null],["Valencia County",null,null,null,null]],"NV":[["Carson City",null,null,null,null],["Churchill County",null,null,null,null],["Clark County",null,null,null,null],["Douglas County",null,null,null,null],["Elko County",null,null,null,null],["Esmeralda County",null,null,null,null],["Eureka County",null,null,null,null],["Humboldt County",null,null,null,null],["Lander County",null,null,null,null],["Lincoln County",null,null,null,null],["Lyon County",null,null,null,null],["Mineral County",null,null,null,null],["Nye County",null,null,null,null],["Pershing County",null,null,null,null],["Storey County",null,null,null,null],["Washoe County",null,null,null,null],["White Pine County",null,null,null,null]],"NY":[["Albany County",null,null,null,null],["Allegany County",null,null,null,null],["Bronx County",1209750,1548975,1872225,2326875],["Broome County",null,null,null,null],["Cattaraugus County",null,null,null,null],["Cayuga County",null,null,null,null],["Chautauqua County",null,null,null,null],["Chemung County",null,null,null,null],["Chenango County",null,null,null,null],["Clinton County",null,null,null,null],["Columbia County",null,null,null,null],["Cortland County",null,null,null,null],["Delaware County",null,null,null,null],["Dutchess County",null,null,null,null],["Erie County",null,null,null,null],["Essex County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Genesee County",null,null,null,null],["Greene County",null,null,null,null],["Hamilton County",null,null,null,null],["Herkimer County",null,null,null,null],["Jefferson County",null,null,null,null],["Kings County",1209750,1548975,1872225,2326875],["Lewis County",null,null,null,null],["Livingston County",null,null,null,null],["Madison County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Nassau County",1209750,1548975,1872225,2326875],["New York County",1209750,1548975,1872225,2326875],["Niagara County",null,null,null,null],["Oneida County",null,null,null,null],["Onondaga County",null,null,null,null],["Ontario County",null,null,null,null],["Orange County",null,null,null,null],["Orleans County",null,null,null,null],["Oswego County",null,null,null,null],["Otsego County",null,null,null,null],["Putnam County",1209750,1548975,1872225,2326875],["Queens County",1209750,1548975,1872225,2326875],["Rensselaer County",null,null,null,null],["Richmond County",1209750,1548975,1872225,2326875],["Rockland County",1209750,1548975,1872225,2326875],["Saratoga County",null,null,null,null],["Schenectady County",null,null,null,null],["Schoharie County",null,null,null,null],["Schuyler County",null,null,null,null],["Seneca County",null,null,null,null],["St. Lawrence County",null,null,null,null],["Steuben County",null,null,null,null],["Suffolk County",1209750,1548975,1872225,2326875],["Sullivan County",null,null,null,null],["Tioga County",null,null,null,null],["Tompkins County",null,null,null,null],["Ulster County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Westchester County",1209750,1548975,1872225,2326875],["Wyoming County",null,null,null,null],["Yates County",null,null,null,null]],"OH":[["Adams County",null,null,null,null],["Allen County",null,null,null,null],["Ashland County",null,null,null,null],["Ashtabula County",null,null,null,null],["Athens County",null,null,null,null],["Auglaize County",null,null,null,null],["Belmont County",null,null,null,null],["Brown County",null,null,null,null],["Butler County",null,null,null,null],["Carroll County",null,null,null,null],["Champaign County",null,null,null,null],["Clark County",null,null,null,null],["Clermont County",null,null,null,null],["Clinton County",null,null,null,null],["Columbiana County",null,null,null,null],["Coshocton County",null,null,null,null],["Crawford County",null,null,null,null],["Cuyahoga County",null,null,null,null],["Darke County",null,null,null,null],["Defiance County",null,null,null,null],["Delaware County",null,null,null,null],["Erie County",null,null,null,null],["Fairfield County",null,null,null,null],["Fayette County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Gallia County",null,null,null,null],["Geauga County",null,null,null,null],["Greene County",null,null,null,null],["Guernsey County",null,null,null,null],["Hamilton County",null,null,null,null],["Hancock County",null,null,null,null],["Hardin County",null,null,null,null],["Harrison County",null,null,null,null],["Henry County",null,null,null,null],["Highland County",null,null,null,null],["Hocking County",null,null,null,null],["Holmes County",null,null,null,null],["Huron County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Knox County",null,null,null,null],["Lake County",null,null,null,null],["Lawrence County",null,null,null,null],["Licking County",null,null,null,null],["Logan County",null,null,null,null],["Lorain County",null,null,null,null],["Lucas County",null,null,null,null],["Madison County",null,null,null,null],["Mahoning County",null,null,null,null],["Marion County",null,null,null,null],["Medina County",null,null,null,null],["Meigs County",null,null,null,null],["Mercer County",null,null,null,null],["Miami County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Morgan County",null,null,null,null],["Morrow County",null,null,null,null],["Muskingum County",null,null,null,null],["Noble County",null,null,null,null],["Ottawa County",null,null,null,null],["Paulding County",null,null,null,null],["Perry County",null,null,null,null],["Pickaway County",null,null,null,null],["Pike County",null,null,null,null],["Portage County",null,null,null,null],["Preble County",null,null,null,null],["Putnam County",null,null,null,null],["Richland County",null,null,null,null],["Ross County",null,null,null,null],["Sandusky County",null,null,null,null],["Scioto County",null,null,null,null],["Seneca County",null,null,null,null],["Shelby County",null,null,null,null],["Stark County",null,null,null,null],["Summit County",null,null,null,null],["Trumbull County",null,null,null,null],["Tuscarawas County",null,null,null,null],["Union County",null,null,null,null],["Van Wert County",null,null,null,null],["Vinton County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Williams County",null,null,null,null],["Wood County",null,null,null,null],["Wyandot County",null,null,null,null]],"OK":[["Adair County",null,null,null,null],["Alfalfa County",null,null,null,null],["Atoka County",null,null,null,null],["Beaver County",null,null,null,null],["Beckham County",null,null,null,null],["Blaine County",null,null,null,null],["Bryan County",null,null,null,null],["Caddo County",null,null,null,null],["Canadian County",null,null,null,null],["Carter County",null,null,null,null],["Cherokee County",null,null,null,null],["Choctaw County",null,null,null,null],["Cimarron County",null,null,null,null],["Cleveland County",null,null,null,null],["Coal County",null,null,null,null],["Comanche County",null,null,null,null],["Cotton County",null,null,null,null],["Craig County",null,null,null,null],["Creek County",null,null,null,null],["Custer County",null,null,null,null],["Delaware County",null,null,null,null],["Dewey County",null,null,null,null],["Ellis County",null,null,null,null],["Garfield County",null,null,null,null],["Garvin County",null,null,null,null],["Grady County",null,null,null,null],["Grant County",null,null,null,null],["Greer County",null,null,null,null],["Harmon County",null,null,null,null],["Harper County",null,null,null,null],["Haskell County",null,null,null,null],["Hughes County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Johnston County",null,null,null,null],["Kay County",null,null,null,null],["Kingfisher County",null,null,null,null],["Kiowa County",null,null,null,null],["Latimer County",null,null,null,null],["Le Flore County",null,null,null,null],["Lincoln County",null,null,null,null],["Logan County",null,null,null,null],["Love County",null,null,null,null],["Major County",null,null,null,null],["Marshall County",null,null,null,null],["Mayes County",null,null,null,null],["McClain County",null,null,null,null],["McCurtain County",null,null,null,null],["McIntosh County",null,null,null,null],["Murray County",null,null,null,null],["Muskogee County",null,null,null,null],["Noble County",null,null,null,null],["Nowata County",null,null,null,null],["Okfuskee County",null,null,null,null],["Oklahoma County",null,null,null,null],["Okmulgee County",null,null,null,null],["Osage County",null,null,null,null],["Ottawa County",null,null,null,null],["Pawnee County",null,null,null,null],["Payne County",null,null,null,null],["Pittsburg County",null,null,null,null],["Pontotoc County",null,null,null,null],["Pottawatomie County",null,null,null,null],["Pushmataha County",null,null,null,null],["Roger Mills County",null,null,null,null],["Rogers County",null,null,null,null],["Seminole County",null,null,null,null],["Sequoyah County",null,null,null,null],["Stephens County",null,null,null,null],["Texas County",null,null,null,null],["Tillman County",null,null,null,null],["Tulsa County",null,null,null,null],["Wagoner County",null,null,null,null],["Washington County",null,null,null,null],["Washita County",null,null,null,null],["Woods County",null,null,null,null],["Woodward County",null,null,null,null]],"OR":[["Baker County",null,null,null,null],["Benton County",null,null,null,null],["Clackamas County",null,null,null,null],["Clatsop County",null,null,null,null],["Columbia County",null,null,null,null],["Coos County",null,null,null,null],["Crook County",null,null,null,null],["Curry County",null,null,null,null],["Deschutes County",null,null,null,null],["Douglas County",null,null,null,null],["Gilliam County",null,null,null,null],["Grant County",null,null,null,null],["Harney County",null,null,null,null],["Hood River County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Josephine County",null,null,null,null],["Klamath County",null,null,null,null],["Lake County",null,null,null,null],["Lane County",null,null,null,null],["Lincoln County",null,null,null,null],["Linn County",null,null,null,null],["Malheur County",null,null,null,null],["Marion County",null,null,null,null],["Morrow County",null,null,null,null],["Multnomah County",null,null,null,null],["Polk County",null,null,null,null],["Sherman County",null,null,null,null],["Tillamook County",null,null,null,null],["Umatilla County",null,null,null,null],["Union County",null,null,null,null],["Wallowa County",null,null,null,null],["Wasco County",null,null,null,null],["Washington County",null,null,null,null],["Wheeler County",null,null,null,null],["Yamhill County",null,null,null,null]],"PA":[["Adams County",null,null,null,null],["Allegheny County",null,null,null,null],["Armstrong County",null,null,null,null],["Beaver County",null,null,null,null],["Bedford County",null,null,null,null],["Berks County",null,null,null,null],["Blair County",null,null,null,null],["Bradford County",null,null,null,null],["Bucks County",null,null,null,null],["Butler County",null,null,null,null],["Cambria County",null,null,null,null],["Cameron County",null,null,null,null],["Carbon County",null,null,null,null],["Centre County",null,null,null,null],["Chester County",null,null,null,null],["Clarion County",null,null,null,null],["Clearfield County",null,null,null,null],["Clinton County",null,null,null,null],["Columbia County",null,null,null,null],["Crawford County",null,null,null,null],["Cumberland County",null,null,null,null],["Dauphin County",null,null,null,null],["Delaware County",null,null,null,null],["Elk County",null,null,null,null],["Erie County",null,null,null,null],["Fayette County",null,null,null,null],["Forest County",null,null,null,null],["Franklin County",null,null,null,null],["Fulton County",null,null,null,null],["Greene County",null,null,null,null],["Huntingdon County",null,null,null,null],["Indiana County",null,null,null,null],["Jefferson County",null,null,null,null],["Juniata County",null,null,null,null],["Lackawanna County",null,null,null,null],["Lancaster County",null,null,null,null],["Lawrence County",null,null,null,null],["Lebanon County",null,null,null,null],["Lehigh County",null,null,null,null],["Luzerne County",null,null,null,null],["Lycoming County",null,null,null,null],["McKean County",null,null,null,null],["Mercer County",null,null,null,null],["Mifflin County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Montour County",null,null,null,null],["Northampton County",null,null,null,null],["Northumberland County",null,null,null,null],["Perry County",null,null,null,null],["Philadelphia County",null,null,null,null],["Pike County",1209750,1548975,1872225,2326875],["Potter County",null,null,null,null],["Schuylkill County",null,null,null,null],["Snyder County",null,null,null,null],["Somerset County",null,null,null,null],["Sullivan County",null,null,null,null],["Susquehanna County",null,null,null,null],["Tioga County",null,null,null,null],["Union County",null,null,null,null],["Venango County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Westmoreland County",null,null,null,null],["Wyoming County",null,null,null,null],["York County",null,null,null,null]],"PR":[["Adjuntas Municipio",null,null,null,null],["Aguada Municipio",null,null,null,null],["Aguadilla Municipio",null,null,null,null],["Aguas Buenas Municipio",null,null,null,null],["Aibonito Municipio",null,null,null,null],["Anasco Municipio",null,null,null,null],["Arecibo Municipio",null,null,null,null],["Arroyo Municipio",null,null,null,null],["Barceloneta Municipio",null,null,null,null],["Barranquitas Municipio",null,null,null,null],["Bayamon Municipio",null,null,null,null],["Cabo Rojo Municipio",null,null,null,null],["Caguas Municipio",null,null,null,null],["Camuy Municipio",null,null,null,null],["Canovanas Municipio",null,null,null,null],["Carolina Municipio",null,null,null,null],["Catano Municipio",null,null,null,null],["Cayey Municipio",null,null,null,null],["Ceiba Municipio",null,null,null,null],["Ciales Municipio",null,null,null,null],["Cidra Municipio",null,null,null,null],["Coamo Municipio",null,null,null,null],["Comerio Municipio",null,null,null,null],["Corozal Municipio",null,null,null,null],["Culebra Municipio",null,null,null,null],["Dorado Municipio",null,null,null,null],["Fajardo Municipio",null,null,null,null],["Florida Municipio",null,null,null,null],["Guanica Municipio",null,null,null,null],["Guayama Municipio",null,null,null,null],["Guayanilla Municipio",null,null,null,null],["Guaynabo Municipio",null,null,null,null],["Gurabo Municipio",null,null,null,null],["Hatillo Municipio",null,null,null,null],["Hormigueros Municipio",null,null,null,null],["Humacao Municipio",null,null,null,null],["Isabela Municipio",null,null,null,null],["Jayuya Municipio",null,null,null,null],["Juana Diaz Municipio",null,null,null,null],["Juncos Municipio",null,null,null,null],["Lajas Municipio",null,null,null,null],["Lares Municipio",null,null,null,null],["Las Marias Municipio",null,null,null,null],["Las Piedras Municipio",null,null,null,null],["Loiza Municipio",null,null,null,null],["Luquillo Municipio",null,null,null,null],["Manati Municipio",null,null,null,null],["Maricao Municipio",null,null,null,null],["Maunabo Municipio",null,null,null,null],["Mayaguez Municipio",null,null,null,null],["Moca Municipio",null,null,null,null],["Morovis Municipio",null,null,null,null],["Naguabo Municipio",null,null,null,null],["Naranjito Municipio",null,null,null,null],["Orocovis Municipio",null,null,null,null],["Patillas Municipio",null,null,null,null],["Penuelas Municipio",null,null,null,null],["Ponce Municipio",null,null,null,null],["Quebradillas Municipio",null,null,null,null],["Rincon Municipio",null,null,null,null],["Rio Grande Municipio",null,null,null,null],["Sabana Grande Municipio",null,null,null,null],["Salinas Municipio",null,null,null,null],["San German Municipio",null,null,null,null],["San Juan Municipio",null,null,null,null],["San Lorenzo Municipio",null,null,null,null],["San Sebastian Municipio",null,null,null,null],["Santa Isabel Municipio",null,null,null,null],["Toa Alta Municipio",null,null,null,null],["Toa Baja Municipio",null,null,null,null],["Trujillo Alto Municipio",null,null,null,null],["Utuado Municipio",null,null,null,null],["Vega Alta Municipio",null,null,null,null],["Vega Baja Municipio",null,null,null,null],["Vieques Municipio",null,null,null,null],["Villalba Municipio",null,null,null,null],["Yabucoa Municipio",null,null,null,null],["Yauco Municipio",null,null,null,null]],"RI":[["Bristol County",null,null,null,null],["Kent County",null,null,null,null],["Newport County",null,null,null,null],["Providence County",null,null,null,null],["Washington County",null,null,null,null]],"SC":[["Abbeville County",null,null,null,null],["Aiken County",null,null,null,null],["Allendale County",null,null,null,null],["Anderson County",null,null,null,null],["Bamberg County",null,null,null,null],["Barnwell County",null,null,null,null],["Beaufort County",null,null,null,null],["Berkeley County",null,null,null,null],["Calhoun County",null,null,null,null],["Charleston County",null,null,null,null],["Cherokee County",null,null,null,null],["Chester County",null,null,null,null],["Chesterfield County",null,null,null,null],["Clarendon County",null,null,null,null],["Colleton County",null,null,null,null],["Darlington County",null,null,null,null],["Dillon County",null,null,null,null],["Dorchester County",null,null,null,null],["Edgefield County",null,null,null,null],["Fairfield County",null,null,null,null],["Florence County",null,null,null,null],["Georgetown County",null,null,null,null],["Greenville County",null,null,null,null],["Greenwood County",null,null,null,null],["Hampton County",null,null,null,null],["Horry County",null,null,null,null],["Jasper County",null,null,null,null],["Kershaw County",null,null,null,null],["Lancaster County",null,null,null,null],["Laurens County",null,null,null,null],["Lee County",null,null,null,null],["Lexington County",null,null,null,null],["Marion County",null,null,null,null],["Marlboro County",null,null,null,null],["McCormick County",null,null,null,null],["Newberry County",null,null,null,null],["Oconee County",null,null,null,null],["Orangeburg County",null,null,null,null],["Pickens County",null,null,null,null],["Richland County",null,null,null,null],["Saluda County",null,null,null,null],["Spartanburg County",null,null,null,null],["Sumter County",null,null,null,null],["Union County",null,null,null,null],["Williamsburg County",null,null,null,null],["York County",null,null,null,null]],"SD":[["Aurora County",null,null,null,null],["Beadle County",null,null,null,null],["Bennett County",null,null,null,null],["Bon Homme County",null,null,null,null],["Brookings County",null,null,null,null],["Brown County",null,null,null,null],["Brule County",null,null,null,null],["Buffalo County",null,null,null,null],["Butte County",null,null,null,null],["Campbell County",null,null,null,null],["Charles Mix County",null,null,null,null],["Clark County",null,null,null,null],["Clay County",null,null,null,null],["Codington County",null,null,null,null],["Corson County",null,null,null,null],["Custer County",null,null,null,null],["Davison County",null,null,null,null],["Day County",null,null,null,null],["Deuel County",null,null,null,null],["Dewey County",null,null,null,null],["Douglas County",null,null,null,null],["Edmunds County",null,null,null,null],["Fall River County",null,null,null,null],["Faulk County",null,null,null,null],["Grant County",null,null,null,null],["Gregory County",null,null,null,null],["Haakon County",null,null,null,null],["Hamlin County",null,null,null,null],["Hand County",null,null,null,null],["Hanson County",null,null,null,null],["Harding County",null,null,null,null],["Hughes County",null,null,null,null],["Hutchinson County",null,null,null,null],["Hyde County",null,null,null,null],["Jackson County",null,null,null,null],["Jerauld County",null,null,null,null],["Jones County",null,null,null,null],["Kingsbury County",null,null,null,null],["Lake County",null,null,null,null],["Lawrence County",null,null,null,null],["Lincoln County",null,null,null,null],["Lyman County",null,null,null,null],["Marshall County",null,null,null,null],["McCook County",null,null,null,null],["McPherson County",null,null,null,null],["Meade County",null,null,null,null],["Mellette County",null,null,null,null],["Miner County",null,null,null,null],["Minnehaha County",null,null,null,null],["Moody County",null,null,null,null],["Oglala Lakota County",null,null,null,null],["Pennington County",null,null,null,null],["Perkins County",null,null,null,null],["Potter County",null,null,null,null],["Roberts County",null,null,null,null],["Sanborn County",null,null,null,null],["Spink County",null,null,null,null],["Stanley County",null,null,null,null],["Sully County",null,null,null,null],["Todd County",null,null,null,null],["Tripp County",null,null,null,null],["Turner County",null,null,null,null],["Union County",null,null,null,null],["Walworth County",null,null,null,null],["Yankton County",null,null,null,null],["Ziebach County",null,null,null,null]],"TN":[["Anderson County",null,null,null,null],["Bedford County",null,null,null,null],["Benton County",null,null,null,null],["Bledsoe County",null,null,null,null],["Blount County",null,null,null,null],["Bradley County",null,null,null,null],["Campbell County",null,null,null,null],["Cannon County",1029250,1317650,1592700,1979350],["Carroll County",null,null,null,null],["Carter County",null,null,null,null],["Cheatham County",1029250,1317650,1592700,1979350],["Chester County",null,null,null,null],["Claiborne County",null,null,null,null],["Clay County",null,null,null,null],["Cocke County",null,null,null,null],["Coffee County",null,null,null,null],["Crockett County",null,null,null,null],["Cumberland County",null,null,null,null],["Davidson County",1029250,1317650,1592700,1979350],["DeKalb County",null,null,null,null],["Decatur County",null,null,null,null],["Dickson County",1029250,1317650,1592700,1979350],["Dyer County",null,null,null,null],["Fayette County",null,null,null,null],["Fentress County",null,null,null,null],["Franklin County",null,null,null,null],["Gibson County",null,null,null,null],["Giles County",null,null,null,null],["Grainger County",null,null,null,null],["Greene County",null,null,null,null],["Grundy County",null,null,null,null],["Hamblen County",null,null,null,null],["Hamilton County",null,null,null,null],["Hancock County",null,null,null,null],["Hardeman County",null,null,null,null],["Hardin County",null,null,null,null],["Hawkins County",null,null,null,null],["Haywood County",null,null,null,null],["Henderson County",null,null,null,null],["Henry County",null,null,null,null],["Hickman County",1029250,1317650,1592700,1979350],["Houston County",null,null,null,null],["Humphreys County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Johnson County",null,null,null,null],["Knox County",null,null,null,null],["Lake County",null,null,null,null],["Lauderdale County",null,null,null,null],["Lawrence County",null,null,null,null],["Lewis County",null,null,null,null],["Lincoln County",null,null,null,null],["Loudon County",null,null,null,null],["Macon County",1029250,1317650,1592700,1979350],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Maury County",1029250,1317650,1592700,1979350],["McMinn County",null,null,null,null],["McNairy County",null,null,null,null],["Meigs County",null,null,null,null],["Monroe County",null,null,null,null],["Montgomery County",null,null,null,null],["Moore County",null,null,null,null],["Morgan County",null,null,null,null],["Obion County",null,null,null,null],["Overton County",null,null,null,null],["Perry County",null,null,null,null],["Pickett County",null,null,null,null],["Polk County",null,null,null,null],["Putnam County",null,null,null,null],["Rhea County",null,null,null,null],["Roane County",null,null,null,null],["Robertson County",1029250,1317650,1592700,1979350],["Rutherford County",1029250,1317650,1592700,1979350],["Scott County",null,null,null,null],["Sequatchie County",null,null,null,null],["Sevier County",null,null,null,null],["Shelby County",null,null,null,null],["Smith County",1029250,1317650,1592700,1979350],["Stewart County",null,null,null,null],["Sullivan County",null,null,null,null],["Sumner County",1029250,1317650,1592700,1979350],["Tipton County",null,null,null,null],["Trousdale County",1029250,1317650,1592700,1979350],["Unicoi County",null,null,null,null],["Union County",null,null,null,null],["Van Buren County",null,null,null,null],["Warren County",null,null,null,null],["Washington County",null,null,null,null],["Wayne County",null,null,null,null],["Weakley County",null,null,null,null],["White County",null,null,null,null],["Williamson County",1029250,1317650,1592700,1979350],["Wilson County",1029250,1317650,1592700,1979350]],"TX":[["Anderson County",null,null,null,null],["Andrews County",null,null,null,null],["Angelina County",null,null,null,null],["Aransas County",null,null,null,null],["Archer County",null,null,null,null],["Armstrong County",null,null,null,null],["Atascosa County",null,null,null,null],["Austin County",null,null,null,null],["Bailey County",null,null,null,null],["Bandera County",null,null,null,null],["Bastrop County",null,null,null,null],["Baylor County",null,null,null,null],["Bee County",null,null,null,null],["Bell County",null,null,null,null],["Bexar County",null,null,null,null],["Blanco County",null,null,null,null],["Borden County",null,null,null,null],["Bosque County",null,null,null,null],["Bowie County",null,null,null,null],["Brazoria County",null,null,null,null],["Brazos County",null,null,null,null],["Brewster County",null,null,null,null],["Briscoe County",null,null,null,null],["Brooks County",null,null,null,null],["Brown County",null,null,null,null],["Burleson County",null,null,null,null],["Burnet County",null,null,null,null],["Caldwell County",null,null,null,null],["Calhoun County",null,null,null,null],["Callahan County",null,null,null,null],["Cameron County",null,null,null,null],["Camp County",null,null,null,null],["Carson County",null,null,null,null],["Cass County",null,null,null,null],["Castro County",null,null,null,null],["Chambers County",null,null,null,null],["Cherokee County",null,null,null,null],["Childress County",null,null,null,null],["Clay County",null,null,null,null],["Cochran County",null,null,null,null],["Coke County",null,null,null,null],["Coleman County",null,null,null,null],["Collin County",null,null,null,null],["Collingsworth County",null,null,null,null],["Colorado County",null,null,null,null],["Comal County",null,null,null,null],["Comanche County",null,null,null,null],["Concho County",null,null,null,null],["Cooke County",null,null,null,null],["Coryell County",null,null,null,null],["Cottle County",null,null,null,null],["Crane County",null,null,null,null],["Crockett County",null,null,null,null],["Crosby County",null,null,null,null],["Culberson County",null,null,null,null],["Dallam County",null,null,null,null],["Dallas County",null,null,null,null],["Dawson County",null,null,null,null],["DeWitt County",null,null,null,null],["Deaf Smith County",null,null,null,null],["Delta County",null,null,null,null],["Denton County",null,null,null,null],["Dickens County",null,null,null,null],["Dimmit County",null,null,null,null],["Donley County",null,null,null,null],["Duval County",null,null,null,null],["Eastland County",null,null,null,null],["Ector County",null,null,null,null],["Edwards County",null,null,null,null],["El Paso County",null,null,null,null],["Ellis County",null,null,null,null],["Erath County",null,null,null,null],["Falls County",null,null,null,null],["Fannin County",null,null,null,null],["Fayette County",null,null,null,null],["Fisher County",null,null,null,null],["Floyd County",null,null,null,null],["Foard County",null,null,null,null],["Fort Bend County",null,null,null,null],["Franklin County",null,null,null,null],["Freestone County",null,null,null,null],["Frio County",null,null,null,null],["Gaines County",null,null,null,null],["Galveston County",null,null,null,null],["Garza County",null,null,null,null],["Gillespie County",null,null,null,null],["Glasscock County",null,null,null,null],["Goliad County",null,null,null,null],["Gonzales County",null,null,null,null],["Gray County",null,null,null,null],["Grayson County",null,null,null,null],["Gregg County",null,null,null,null],["Grimes County",null,null,null,null],["Guadalupe County",null,null,null,null],["Hale County",null,null,null,null],["Hall County",null,null,null,null],["Hamilton County",null,null,null,null],["Hansford County",null,null,null,null],["Hardeman County",null,null,null,null],["Hardin County",null,null,null,null],["Harris County",null,null,null,null],["Harrison County",null,null,null,null],["Hartley County",null,null,null,null],["Haskell County",null,null,null,null],["Hays County",null,null,null,null],["Hemphill County",null,null,null,null],["Henderson County",null,null,null,null],["Hidalgo County",null,null,null,null],["Hill County",null,null,null,null],["Hockley County",null,null,null,null],["Hood County",null,null,null,null],["Hopkins County",null,null,null,null],["Houston County",null,null,null,null],["Howard County",null,null,null,null],["Hudspeth County",null,null,null,null],["Hunt County",null,null,null,null],["Hutchinson County",null,null,null,null],["Irion County",null,null,null,null],["Jack County",null,null,null,null],["Jackson County",null,null,null,null],["Jasper County",null,null,null,null],["Jeff Davis County",null,null,null,null],["Jefferson County",null,null,null,null],["Jim Hogg County",null,null,null,null],["Jim Wells County",null,null,null,null],["Johnson County",null,null,null,null],["Jones County",null,null,null,null],["Karnes County",null,null,null,null],["Kaufman County",null,null,null,null],["Kendall County",null,null,null,null],["Kenedy County",null,null,null,null],["Kent County",null,null,null,null],["Kerr County",null,null,null,null],["Kimble County",null,null,null,null],["King County",null,null,null,null],["Kinney County",null,null,null,null],["Kleberg County",null,null,null,null],["Knox County",null,null,null,null],["La Salle County",null,null,null,null],["Lamar County",null,null,null,null],["Lamb County",null,null,null,null],["Lampasas County",null,null,null,null],["Lavaca County",null,null,null,null],["Lee County",null,null,null,null],["Leon County",null,null,null,null],["Liberty County",null,null,null,null],["Limestone County",null,null,null,null],["Lipscomb County",null,null,null,null],["Live Oak County",null,null,null,null],["Llano County",null,null,null,null],["Loving County",null,null,null,null],["Lubbock County",null,null,null,null],["Lynn County",null,null,null,null],["Madison County",null,null,null,null],["Marion County",null,null,null,null],["Martin County",null,null,null,null],["Mason County",null,null,null,null],["Matagorda County",null,null,null,null],["Maverick County",null,null,null,null],["McCulloch County",null,null,null,null],["McLennan County",null,null,null,null],["McMullen County",null,null,null,null],["Medina County",null,null,null,null],["Menard County",null,null,null,null],["Midland County",null,null,null,null],["Milam County",null,null,null,null],["Mills County",null,null,null,null],["Mitchell County",null,null,null,null],["Montague County",null,null,null,null],["Montgomery County",null,null,null,null],["Moore County",null,null,null,null],["Morris County",null,null,null,null],["Motley County",null,null,null,null],["Nacogdoches County",null,null,null,null],["Navarro County",null,null,null,null],["Newton County",null,null,null,null],["Nolan County",null,null,null,null],["Nueces County",null,null,null,null],["Ochiltree County",null,null,null,null],["Oldham County",null,null,null,null],["Orange County",null,null,null,null],["Palo Pinto County",null,null,null,null],["Panola County",null,null,null,null],["Parker County",null,null,null,null],["Parmer County",null,null,null,null],["Pecos County",null,null,null,null],["Polk County",null,null,null,null],["Potter County",null,null,null,null],["Presidio County",null,null,null,null],["Rains County",null,null,null,null],["Randall County",null,null,null,null],["Reagan County",null,null,null,null],["Real County",null,null,null,null],["Red River County",null,null,null,null],["Reeves County",null,null,null,null],["Refugio County",null,null,null,null],["Roberts County",null,null,null,null],["Robertson County",null,null,null,null],["Rockwall County",null,null,null,null],["Runnels County",null,null,null,null],["Rusk County",null,null,null,null],["Sabine County",null,null,null,null],["San Augustine County",null,null,null,null],["San Jacinto County",null,null,null,null],["San Patricio County",null,null,null,null],["San Saba County",null,null,null,null],["Schleicher County",null,null,null,null],["Scurry County",null,null,null,null],["Shackelford County",null,null,null,null],["Shelby County",null,null,null,null],["Sherman County",null,null,null,null],["Smith County",null,null,null,null],["Somervell County",null,null,null,null],["Starr County",null,null,null,null],["Stephens County",null,null,null,null],["Sterling County",null,null,null,null],["Stonewall County",null,null,null,null],["Sutton County",null,null,null,null],["Swisher County",null,null,null,null],["Tarrant County",null,null,null,null],["Taylor County",null,null,null,null],["Terrell County",null,null,null,null],["Terry County",null,null,null,null],["Throckmorton County",null,null,null,null],["Titus County",null,null,null,null],["Tom Green County",null,null,null,null],["Travis County",null,null,null,null],["Trinity County",null,null,null,null],["Tyler County",null,null,null,null],["Upshur County",null,null,null,null],["Upton County",null,null,null,null],["Uvalde County",null,null,null,null],["Val Verde County",null,null,null,null],["Van Zandt County",null,null,null,null],["Victoria County",null,null,null,null],["Walker County",null,null,null,null],["Waller County",null,null,null,null],["Ward County",null,null,null,null],["Washington County",null,null,null,null],["Webb County",null,null,null,null],["Wharton County",null,null,null,null],["Wheeler County",null,null,null,null],["Wichita County",null,null,null,null],["Wilbarger County",null,null,null,null],["Willacy County",null,null,null,null],["Williamson County",null,null,null,null],["Wilson County",null,null,null,null],["Winkler County",null,null,null,null],["Wise County",null,null,null,null],["Wood County",null,null,null,null],["Yoakum County",null,null,null,null],["Young County",null,null,null,null],["Zapata County",null,null,null,null],["Zavala County",null,null,null,null]],"UT":[["Beaver County",null,null,null,null],["Box Elder County",null,null,null,null],["Cache County",null,null,null,null],["Carbon County",null,null,null,null],["Daggett County",null,null,null,null],["Davis County",null,null,null,null],["Duchesne County",null,null,null,null],["Emery County",null,null,null,null],["Garfield County",null,null,null,null],["Grand County",839500,1074700,1299100,1614450],["Iron County",null,null,null,null],["Juab County",null,null,null,null],["Kane County",null,null,null,null],["Millard County",null,null,null,null],["Morgan County",null,null,null,null],["Piute County",null,null,null,null],["Rich County",null,null,null,null],["Salt Lake County",null,null,null,null],["San Juan County",null,null,null,null],["Sanpete County",null,null,null,null],["Sevier County",null,null,null,null],["Summit County",1150000,1472250,1779600,2211600],["Tooele County",null,null,null,null],["Uintah County",null,null,null,null],["Utah County",null,null,null,null],["Wasatch County",1150000,1472250,1779600,2211600],["Washington County",null,null,null,null],["Wayne County",997050,1276400,1542900,1917450],["Weber County",null,null,null,null]],"VA":[["Accomack County",null,null,null,null],["Albemarle County",null,null,null,null],["Alexandria city",1249125,1599375,1933200,2402625],["Alleghany County",null,null,null,null],["Amelia County",null,null,null,null],["Amherst County",null,null,null,null],["Appomattox County",null,null,null,null],["Arlington County",1249125,1599375,1933200,2402625],["Augusta County",null,null,null,null],["Bath County",null,null,null,null],["Bedford County",null,null,null,null],["Bland County",null,null,null,null],["Botetourt County",null,null,null,null],["Bristol city",null,null,null,null],["Brunswick County",null,null,null,null],["Buchanan County",null,null,null,null],["Buckingham County",null,null,null,null],["Buena Vista city",null,null,null,null],["Campbell County",null,null,null,null],["Caroline County",null,null,null,null],["Carroll County",null,null,null,null],["Charles City County",null,null,null,null],["Charlotte County",null,null,null,null],["Charlottesville city",null,null,null,null],["Chesapeake city",null,null,null,null],["Chesterfield County",null,null,null,null],["Clarke County",1249125,1599375,1933200,2402625],["Colonial Heights city",null,null,null,null],["Covington city",null,null,null,null],["Craig County",null,null,null,null],["Culpeper County",1249125,1599375,1933200,2402625],["Cumberland County",null,null,null,null],["Danville city",null,null,null,null],["Dickenson County",null,null,null,null],["Dinwiddie County",null,null,null,null],["Emporia city",null,null,null,null],["Essex County",null,null,null,null],["Fairfax County",1249125,1599375,1933200,2402625],["Fairfax city",1249125,1599375,1933200,2402625],["Falls Church city",1249125,1599375,1933200,2402625],["Fauquier County",1249125,1599375,1933200,2402625],["Floyd County",null,null,null,null],["Fluvanna County",null,null,null,null],["Franklin County",null,null,null,null],["Franklin city",null,null,null,null],["Frederick County",null,null,null,null],["Fredericksburg city",1249125,1599375,1933200,2402625],["Galax city",null,null,null,null],["Giles County",null,null,null,null],["Gloucester County",null,null,null,null],["Goochland County",null,null,null,null],["Grayson County",null,null,null,null],["Greene County",null,null,null,null],["Greensville County",null,null,null,null],["Halifax County",null,null,null,null],["Hampton city",null,null,null,null],["Hanover County",null,null,null,null],["Harrisonburg city",null,null,null,null],["Henrico County",null,null,null,null],["Henry County",null,null,null,null],["Highland County",null,null,null,null],["Hopewell city",null,null,null,null],["Isle of Wight County",null,null,null,null],["James City County",null,null,null,null],["King George County",null,null,null,null],["King William County",null,null,null,null],["King and Queen County",null,null,null,null],["Lancaster County",null,null,null,null],["Lee County",null,null,null,null],["Lexington city",null,null,null,null],["Loudoun County",1249125,1599375,1933200,2402625],["Louisa County",null,null,null,null],["Lunenburg County",null,null,null,null],["Lynchburg city",null,null,null,null],["Madison County",1209750,1548975,1872225,2326875],["Manassas Park city",1249125,1599375,1933200,2402625],["Manassas city",1249125,1599375,1933200,2402625],["Martinsville city",null,null,null,null],["Mathews County",null,null,null,null],["Mecklenburg County",null,null,null,null],["Middlesex County",null,null,null,null],["Montgomery County",null,null,null,null],["Nelson County",null,null,null,null],["New Kent County",null,null,null,null],["Newport News city",null,null,null,null],["Norfolk city",null,null,null,null],["Northampton County",null,null,null,null],["Northumberland County",null,null,null,null],["Norton city",null,null,null,null],["Nottoway County",null,null,null,null],["Orange County",null,null,null,null],["Page County",null,null,null,null],["Patrick County",null,null,null,null],["Petersburg city",null,null,null,null],["Pittsylvania County",null,null,null,null],["Poquoson city",null,null,null,null],["Portsmouth city",null,null,null,null],["Powhatan County",null,null,null,null],["Prince Edward County",null,null,null,null],["Prince George County",null,null,null,null],["Prince William County",1249125,1599375,1933200,2402625],["Pulaski County",null,null,null,null],["Radford city",null,null,null,null],["Rappahannock County",1249125,1599375,1933200,2402625],["Richmond County",null,null,null,null],["Richmond city",null,null,null,null],["Roanoke County",null,null,null,null],["Roanoke city",null,null,null,null],["Rockbridge County",null,null,null,null],["Rockingham County",null,null,null,null],["Russell County",null,null,null,null],["Salem city",null,null,null,null],["Scott County",null,null,null,null],["Shenandoah County",null,null,null,null],["Smyth County",null,null,null,null],["Southampton County",null,null,null,null],["Spotsylvania County",1249125,1599375,1933200,2402625],["Stafford County",1249125,1599375,1933200,2402625],["Staunton city",null,null,null,null],["Suffolk city",null,null,null,null],["Surry County",null,null,null,null],["Sussex County",null,null,null,null],["Tazewell County",null,null,null,null],["Virginia Beach city",null,null,null,null],["Warren County",1249125,1599375,1933200,2402625],["Washington County",null,null,null,null],["Waynesboro city",null,null,null,null],["Westmoreland County",null,null,null,null],["Williamsburg city",null,null,null,null],["Winchester city",null,null,null,null],["Wise County",null,null,null,null],["Wythe County",null,null,null,null],["York County",null,null,null,null]],"VI":[["St. Croix Island",1249125,1599375,1933200,2402625],["St. John Island",1249125,1599375,1933200,2402625],["St. Thomas Island",1249125,1599375,1933200,2402625]],"VT":[["Addison County",null,null,null,null],["Bennington County",null,null,null,null],["Caledonia County",null,null,null,null],["Chittenden County",null,null,null,null],["Essex County",null,null,null,null],["Franklin County",null,null,null,null],["Grand Isle County",null,null,null,null],["Lamoille County",null,null,null,null],["Orange County",null,null,null,null],["Orleans County",null,null,null,null],["Rutland County",null,null,null,null],["Washington County",null,null,null,null],["Windham County",null,null,null,null],["Windsor County",null,null,null,null]],"WA":[["Adams County",null,null,null,null],["Asotin County",null,null,null,null],["Benton County",null,null,null,null],["Chelan County",null,null,null,null],["Clallam County",null,null,null,null],["Clark County",null,null,null,null],["Columbia County",null,null,null,null],["Cowlitz County",null,null,null,null],["Douglas County",null,null,null,null],["Ferry County",null,null,null,null],["Franklin County",null,null,null,null],["Garfield County",null,null,null,null],["Grant County",null,null,null,null],["Grays Harbor County",null,null,null,null],["Island County",null,null,null,null],["Jefferson County",null,null,null,null],["King County",1063750,1361800,1646100,2045700],["Kitsap County",null,null,null,null],["Kittitas County",null,null,null,null],["Klickitat County",null,null,null,null],["Lewis County",null,null,null,null],["Lincoln County",null,null,null,null],["Mason County",null,null,null,null],["Okanogan County",null,null,null,null],["Pacific County",null,null,null,null],["Pend Oreille County",null,null,null,null],["Pierce County",1063750,1361800,1646100,2045700],["San Juan County",null,null,null,null],["Skagit County",null,null,null,null],["Skamania County",null,null,null,null],["Snohomish County",1063750,1361800,1646100,2045700],["Spokane County",null,null,null,null],["Stevens County",null,null,null,null],["Thurston County",null,null,null,null],["Wahkiakum County",null,null,null,null],["Walla Walla County",null,null,null,null],["Whatcom County",null,null,null,null],["Whitman County",null,null,null,null],["Yakima County",null,null,null,null]],"WI":[["Adams County",null,null,null,null],["Ashland County",null,null,null,null],["Barron County",null,null,null,null],["Bayfield County",null,null,null,null],["Brown County",null,null,null,null],["Buffalo County",null,null,null,null],["Burnett County",null,null,null,null],["Calumet County",null,null,null,null],["Chippewa County",null,null,null,null],["Clark County",null,null,null,null],["Columbia County",null,null,null,null],["Crawford County",null,null,null,null],["Dane County",null,null,null,null],["Dodge County",null,null,null,null],["Door County",null,null,null,null],["Douglas County",null,null,null,null],["Dunn County",null,null,null,null],["Eau Claire County",null,null,null,null],["Florence County",null,null,null,null],["Fond Du Lac County",null,null,null,null],["Forest County",null,null,null,null],["Grant County",null,null,null,null],["Green County",null,null,null,null],["Green Lake County",null,null,null,null],["Iowa County",null,null,null,null],["Iron County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",null,null,null,null],["Juneau County",null,null,null,null],["Kenosha County",null,null,null,null],["Kewaunee County",null,null,null,null],["La Crosse County",null,null,null,null],["Lafayette County",null,null,null,null],["Langlade County",null,null,null,null],["Lincoln County",null,null,null,null],["Manitowoc County",null,null,null,null],["Marathon County",null,null,null,null],["Marinette County",null,null,null,null],["Marquette County",null,null,null,null],["Menominee County",null,null,null,null],["Milwaukee County",null,null,null,null],["Monroe County",null,null,null,null],["Oconto County",null,null,null,null],["Oneida County",null,null,null,null],["Outagamie County",null,null,null,null],["Ozaukee County",null,null,null,null],["Pepin County",null,null,null,null],["Pierce County",null,null,null,null],["Polk County",null,null,null,null],["Portage County",null,null,null,null],["Price County",null,null,null,null],["Racine County",null,null,null,null],["Richland County",null,null,null,null],["Rock County",null,null,null,null],["Rusk County",null,null,null,null],["Sauk County",null,null,null,null],["Sawyer County",null,null,null,null],["Shawano County",null,null,null,null],["Sheboygan County",null,null,null,null],["St. Croix County",null,null,null,null],["Taylor County",null,null,null,null],["Trempealeau County",null,null,null,null],["Vernon County",null,null,null,null],["Vilas County",null,null,null,null],["Walworth County",null,null,null,null],["Washburn County",null,null,null,null],["Washington County",null,null,null,null],["Waukesha County",null,null,null,null],["Waupaca County",null,null,null,null],["Waushara County",null,null,null,null],["Winnebago County",null,null,null,null],["Wood County",null,null,null,null]],"WV":[["Barbour County",null,null,null,null],["Berkeley County",null,null,null,null],["Boone County",null,null,null,null],["Braxton County",null,null,null,null],["Brooke County",null,null,null,null],["Cabell County",null,null,null,null],["Calhoun County",null,null,null,null],["Clay County",null,null,null,null],["Doddridge County",null,null,null,null],["Fayette County",null,null,null,null],["Gilmer County",null,null,null,null],["Grant County",null,null,null,null],["Greenbrier County",null,null,null,null],["Hampshire County",null,null,null,null],["Hancock County",null,null,null,null],["Hardy County",null,null,null,null],["Harrison County",null,null,null,null],["Jackson County",null,null,null,null],["Jefferson County",1249125,1599375,1933200,2402625],["Kanawha County",null,null,null,null],["Lewis County",null,null,null,null],["Lincoln County",null,null,null,null],["Logan County",null,null,null,null],["Marion County",null,null,null,null],["Marshall County",null,null,null,null],["Mason County",null,null,null,null],["McDowell County",null,null,null,null],["Mercer County",null,null,null,null],["Mineral County",null,null,null,null],["Mingo County",null,null,null,null],["Monongalia County",null,null,null,null],["Monroe County",null,null,null,null],["Morgan County",null,null,null,null],["Nicholas County",null,null,null,null],["Ohio County",null,null,null,null],["Pendleton County",null,null,null,null],["Pleasants County",null,null,null,null],["Pocahontas County",null,null,null,null],["Preston County",null,null,null,null],["Putnam County",null,null,null,null],["Raleigh County",null,null,null,null],["Randolph County",null,null,null,null],["Ritchie County",null,null,null,null],["Roane County",null,null,null,null],["Summers County",null,null,null,null],["Taylor County",null,null,null,null],["Tucker County",null,null,null,null],["Tyler County",null,null,null,null],["Upshur County",null,null,null,null],["Wayne County",null,null,null,null],["Webster County",null,null,null,null],["Wetzel County",null,null,null,null],["Wirt County",null,null,null,null],["Wood County",null,null,null,null],["Wyoming County",null,null,null,null]],"WY":[["Albany County",null,null,null,null],["Big Horn County",null,null,null,null],["Campbell County",null,null,null,null],["Carbon County",null,null,null,null],["Converse County",null,null,null,null],["Crook County",null,null,null,null],["Fremont County",null,null,null,null],["Goshen County",null,null,null,null],["Hot Springs County",null,null,null,null],["Johnson County",null,null,null,null],["Laramie County",null,null,null,null],["Lincoln County",null,null,null,null],["Natrona County",null,null,null,null],["Niobrara County",null,null,null,null],["Park County",null,null,null,null],["Platte County",null,null,null,null],["Sheridan County",null,null,null,null],["Sublette County",null,null,null,null],["Sweetwater County",null,null,null,null],["Teton County",1249125,1599375,1933200,2402625],["Uinta County",null,null,null,null],["Washakie County",null,null,null,null],["Weston County",null,null,null,null]]}};
+
+  // ===== State / County dropdowns =====
+  const stateSelect = document.getElementById('state-select');
+  const countySelect = document.getElementById('county-select');
+  const countyLimitInput = document.getElementById('county-limit');
+  const locationHelp = document.getElementById('location-help');
+  const limitSource = document.getElementById('limit-source');
+
+  // Populate state dropdown
+  const sortedStates = Object.entries(COUNTY_DATA.states).sort((a, b) => a[1].localeCompare(b[1]));
+  for (const [abbr, name] of sortedStates) {
+    const opt = document.createElement('option');
+    opt.value = abbr;
+    opt.textContent = name;
+    stateSelect.appendChild(opt);
+  }
+
+  function formatMoney(n) {
+    return '$' + n.toLocaleString('en-US');
+  }
+
+  const unitsSelect = document.getElementById('units-select');
+
+  function getUnits() {
+    return parseInt(unitsSelect.value, 10) || 1;
+  }
+
+  function getCountyLimitForUnits(state, idx, units) {
+    const row = COUNTY_DATA.counties[state][idx];
+    // row = [name, l1_or_null, l2_or_null, l3_or_null, l4_or_null]
+    const explicit = row[units];
+    if (explicit !== null && explicit !== undefined) return { limit: explicit, baseline: false };
+    return { limit: COUNTY_DATA.meta.baselines[String(units)], baseline: true };
+  }
+
+  function populateCounties(preserveIdx) {
+    const state = stateSelect.value;
+    const units = getUnits();
+    countySelect.innerHTML = '<option value="">Select county…</option>';
+
+    if (!state) {
+      countySelect.disabled = true;
+      locationHelp.textContent = 'Select a state and county to auto-fill the 2026 loan limit.';
+      return;
+    }
+
+    const counties = COUNTY_DATA.counties[state] || [];
+    counties.forEach((row, idx) => {
+      const name = row[0];
+      const limit = row[units]; // 1..4
+      const opt = document.createElement('option');
+      opt.value = idx;
+      opt.textContent = (limit === null || limit === undefined) ? name : `${name} — ${formatMoney(limit)}`;
+      countySelect.appendChild(opt);
+    });
+    countySelect.disabled = false;
+    const baseline = COUNTY_DATA.meta.baselines[String(units)];
+    locationHelp.textContent = `${counties.length} counties in ${COUNTY_DATA.states[state]}. Counties without a price use the $${baseline.toLocaleString('en-US')} ${units}-unit baseline.`;
+
+    if (preserveIdx !== undefined && preserveIdx !== '' && !isNaN(parseInt(preserveIdx, 10))) {
+      countySelect.value = preserveIdx;
+    }
+  }
+
+  function applyCountyLimit() {
+    const state = stateSelect.value;
+    const idx = parseInt(countySelect.value, 10);
+    if (!state || isNaN(idx)) return;
+
+    const row = COUNTY_DATA.counties[state][idx];
+    const name = row[0];
+    const units = getUnits();
+    const { limit, baseline } = getCountyLimitForUnits(state, idx, units);
+    const ceiling = COUNTY_DATA.meta.ceilings[String(units)];
+
+    countyLimitInput.value = limit.toLocaleString('en-US');
+
+    const unitLabel = `${units}-unit`;
+    if (baseline) {
+      limitSource.innerHTML = `Auto-filled: <strong>${name}, ${COUNTY_DATA.states[state]}</strong> uses the 2026 ${unitLabel} baseline ($${limit.toLocaleString('en-US')}). <span style="color: var(--ink-muted);">Edit above to override.</span>`;
+    } else if (limit === ceiling) {
+      limitSource.innerHTML = `Auto-filled: <strong>${name}, ${COUNTY_DATA.states[state]}</strong> is at the 2026 ${unitLabel} high-cost ceiling. <span style="color: var(--ink-muted);">Edit above to override.</span>`;
+    } else {
+      limitSource.innerHTML = `Auto-filled: <strong>${name}, ${COUNTY_DATA.states[state]}</strong> is a high-cost county (mid-tier, ${unitLabel}). <span style="color: var(--ink-muted);">Verify exact figure on FHFA.gov before underwriting.</span>`;
+    }
+  }
+
+  stateSelect.addEventListener('change', () => {
+    populateCounties();
+  });
+
+  unitsSelect.addEventListener('change', () => {
+    const prevIdx = countySelect.value;
+    populateCounties(prevIdx);
+    if (countySelect.value) {
+      applyCountyLimit();
+    }
+    calculate();
+  });
+
+  countySelect.addEventListener('change', () => {
+    applyCountyLimit();
+    calculate();
+  });
+
+  // Reset source label if user manually edits the limit field
+  countyLimitInput.addEventListener('input', () => {
+    if (stateSelect.value && countySelect.value) {
+      const idx = parseInt(countySelect.value, 10);
+      const units = getUnits();
+      const { limit: expected } = getCountyLimitForUnits(stateSelect.value, idx, units);
+      if (parseMoney(countyLimitInput.value) !== expected) {
+        limitSource.innerHTML = `<em>Manual override — different from the FHFA 2026 ${units}-unit limit for the selected county.</em>`;
+      }
+    }
+  });
+
+  // ===== Money formatting =====
+  const fmt = (n) => {
+    if (!isFinite(n)) return '—';
+    if (n === 0) return '$0';
+    return '$' + Math.round(n).toLocaleString('en-US');
+  };
+
+  const fmtPct = (n) => {
+    if (!isFinite(n)) return '—';
+    return (n * 100).toFixed(2) + '%';
+  };
+
+  const parseMoney = (str) => {
+    if (typeof str === 'number') return str;
+    const cleaned = String(str).replace(/[^0-9.]/g, '');
+    return parseFloat(cleaned) || 0;
+  };
+
+  // Money input formatting on blur
+  document.querySelectorAll('.money').forEach(input => {
+    input.addEventListener('input', () => {
+      // Strip non-numeric characters except commas
+      const cursor = input.selectionStart;
+      const oldLen = input.value.length;
+      const num = parseMoney(input.value);
+      input.value = num ? num.toLocaleString('en-US') : '';
+      // Adjust cursor
+      const newLen = input.value.length;
+      input.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
+      calculate();
+    });
+  });
+
+  // ===== Funding fee table =====
+  const getFundingFeeRate = (usage, dpPct, exempt) => {
+    if (exempt) return 0;
+    if (dpPct >= 0.10) return 0.0125;
+    if (dpPct >= 0.05) return 0.015;
+    return usage === 'first' ? 0.0215 : 0.033;
+  };
+
+  // ===== Core calculation =====
+  function calculate() {
+    const price = parseMoney(document.getElementById('purchase-price').value);
+    const value = parseMoney(document.getElementById('appraised-value').value);
+    const countyLimit = parseMoney(document.getElementById('county-limit').value);
+    const usedEnt = parseMoney(document.getElementById('used-entitlement').value);
+    const scenario = document.querySelector('input[name="ent-scenario"]:checked').value;
+    // Full entitlement applies for first-time use OR restored entitlement (Blue Water Navy Act)
+    const primaryIsFull = (scenario === 'first-time' || scenario === 'restored');
+    const usage = document.querySelector('input[name="usage"]:checked').value;
+    const exempt = document.getElementById('exempt').checked;
+    const financeFee = document.getElementById('finance-fee').checked;
+
+    // ===== Joint borrower handling =====
+    const isJoint = document.querySelector('input[name="joint"]:checked').value === 'yes';
+    let totalVets = 1;
+    let cobIsFull = true;
+    let cobUsedEnt = 0;
+    if (isJoint) {
+      totalVets = 2;
+      const cobScenario = document.querySelector('input[name="cob-scenario"]:checked').value;
+      cobIsFull = (cobScenario !== 'active');
+      if (!cobIsFull) {
+        // hidden input now stores the summed charged amount from the loans table
+        cobUsedEnt = parseMoney(document.getElementById('cob-prior-loan-amount').value);
+      }
+    }
+
+    const allFull = primaryIsFull && cobIsFull;
+    const primaryUsedActive = primaryIsFull ? 0 : usedEnt;
+    const combinedUsed = primaryUsedActive + cobUsedEnt;
+
+    // The "value" used in calculations is the lesser of price and appraised value
+    const valueBasis = Math.min(price, value);
+    // Any excess of price over value is required out of pocket (non-financeable)
+    const valueShortfall = Math.max(0, price - value);
+
+    // Available entitlement
+    let maxGuaranty, availableEnt, zeroDownMax;
+    // For tracking the isFullEnt-like behavior downstream
+    const isFullEnt = allFull;
+    if (allFull) {
+      // All vets full entitlement: 25% of any loan amount, no county cap
+      availableEnt = Infinity;
+      zeroDownMax = Infinity;
+      maxGuaranty = valueBasis * 0.25;
+    } else {
+      // At least one vet partial → CLL cap on max guaranty per loan
+      maxGuaranty = countyLimit * 0.25;
+      // Combined pool: each vet contributes (25% × CLL − used_i).
+      // Effectively capped at 25% × CLL on any single loan.
+      const combinedPoolRaw = totalVets * maxGuaranty - combinedUsed;
+      availableEnt = Math.max(0, Math.min(maxGuaranty, combinedPoolRaw));
+      // Zero-down max loan: entitlement / 0.25 = entitlement × 4
+      zeroDownMax = availableEnt * 4;
+    }
+
+    // Required down payment for value-portion of price
+    let downPayment;
+    if (isFullEnt) {
+      downPayment = 0;
+    } else if (valueBasis <= zeroDownMax) {
+      downPayment = 0;
+    } else {
+      // 25% of the shortfall
+      downPayment = (valueBasis - zeroDownMax) * 0.25;
+    }
+
+    // Add value shortfall (price > appraisal) — fully borrower's responsibility
+    const totalDownPayment = downPayment + valueShortfall;
+
+    // Base loan amount = value basis − down payment for shortfall coverage
+    const baseLoan = valueBasis - downPayment;
+
+    // Funding fee
+    const dpPctOfPrice = price > 0 ? totalDownPayment / price : 0;
+    const ffRate = getFundingFeeRate(usage, dpPctOfPrice, exempt);
+    const fundingFee = baseLoan * ffRate;
+
+    // Final loan amount
+    const finalLoan = financeFee ? baseLoan + fundingFee : baseLoan;
+    const cashFundingFee = financeFee ? 0 : fundingFee;
+    const totalCash = totalDownPayment + cashFundingFee;
+
+    // Effective guaranty % per VA worksheet: (entitlement + down) / value
+    let entitlementForGuaranty;
+    if (isFullEnt) {
+      entitlementForGuaranty = baseLoan * 0.25;
+    } else {
+      entitlementForGuaranty = availableEnt;
+    }
+    const guarantyPct = valueBasis > 0 ? (entitlementForGuaranty + totalDownPayment) / valueBasis : 0;
+
+    // ===== Render =====
+    const setVal = (id, val) => {
+      const el = document.getElementById(id);
+      if (el && el.textContent !== val) {
+        el.textContent = val;
+        el.classList.remove('flash');
+        // force reflow
+        void el.offsetWidth;
+        el.classList.add('flash');
+      }
+    };
+
+    // Hero
+    if (isFullEnt) {
+      setVal('max-loan', 'Unlimited');
+      const subText = scenario === 'restored'
+        ? 'Restored full entitlement — no VA loan cap, lender underwriting only'
+        : 'Full entitlement — no VA loan cap, lender underwriting only';
+      document.getElementById('max-loan-sub').textContent = subText;
+    } else {
+      setVal('max-loan', fmt(zeroDownMax));
+      document.getElementById('max-loan-sub').textContent =
+        zeroDownMax >= price
+          ? 'Sufficient for this purchase price — zero down possible'
+          : `Below purchase price — down payment required`;
+    }
+
+    // Status pill
+    const pill = document.getElementById('status-pill');
+    const pillText = document.getElementById('status-text');
+    pill.className = 'status-pill';
+    if (totalDownPayment === 0) {
+      pill.classList.add('zero-down');
+      pillText.textContent = 'Zero Down Available';
+    } else {
+      pillText.textContent = `${fmt(totalDownPayment)} Down Required`;
+    }
+
+    // Breakdown
+    setVal('r-entitlement', isFullEnt ? '25% of loan' : fmt(availableEnt));
+    setVal('r-downpayment', fmt(totalDownPayment));
+    setVal('r-fee', exempt ? 'Exempt' : fmt(fundingFee));
+    document.getElementById('r-fee-pct').textContent = exempt ? 'No fee' : `${(ffRate * 100).toFixed(2)}% · ${financeFee ? 'financed' : 'paid in cash'}`;
+    setVal('r-final-loan', fmt(finalLoan));
+    setVal('r-cash', fmt(totalCash));
+    setVal('r-guaranty-pct', fmtPct(guarantyPct));
+
+    // ===== Steps =====
+    const steps = document.getElementById('steps');
+    let stepHTML = '';
+    let n = 1;
+
+    const addStep = (desc, val, op = '') => {
+      stepHTML += `
+        <div class="step">
+          <span class="step-num">${String(n).padStart(2, '0')}</span>
+          <span class="step-desc">${desc}</span>
+          <span class="step-val ${op ? '' : ''}">${op ? `<span class="step-val op">${op}</span> ` : ''}${val}</span>
+        </div>`;
+      n++;
+    };
+
+    if (isFullEnt) {
+      if (isJoint) {
+        addStep('Joint loan — both veterans full entitlement', '');
+      } else if (scenario === 'restored') {
+        addStep('Prior VA loan paid off & property sold — entitlement restored', '');
+      } else {
+        addStep('First-time VA loan use — full entitlement', '');
+      }
+      addStep('Blue Water Navy Act (Jan 2020): no VA loan limit', '');
+      addStep('VA guarantees 25% of the final loan amount', fmt(baseLoan * 0.25));
+    } else {
+      addStep(`County loan limit × 25% (max guaranty per loan)`, fmt(maxGuaranty));
+      if (isJoint) {
+        addStep(`Combined pool: ${totalVets} veterans × 25% × CLL`, fmt(totalVets * maxGuaranty));
+        if (combinedUsed > 0) {
+          addStep(`Less combined entitlement already charged`, fmt(combinedUsed), '−');
+        }
+        addStep(`Effective available (capped at 25% × CLL per loan)`, fmt(availableEnt), '=');
+      } else {
+        addStep(`Less entitlement currently charged`, fmt(usedEnt), '−');
+        addStep(`Available entitlement`, fmt(availableEnt), '=');
+      }
+      addStep(`Zero-down maximum loan (entitlement ÷ 25%)`, fmt(zeroDownMax));
+    }
+
+    addStep(`Lesser of purchase price or appraised value`, fmt(valueBasis));
+
+    if (!isFullEnt && valueBasis > zeroDownMax) {
+      addStep(`Excess over zero-down capacity`, fmt(valueBasis - zeroDownMax));
+      addStep(`Down payment on excess (25%)`, fmt(downPayment), '×');
+    }
+
+    if (valueShortfall > 0) {
+      addStep(`Price exceeds appraisal — non-financeable difference`, fmt(valueShortfall), '+');
+    }
+
+    addStep(`Total down payment / cash equity`, fmt(totalDownPayment), '=');
+    addStep(`Base loan amount`, fmt(baseLoan));
+
+    if (!exempt) {
+      addStep(`Funding fee rate (${usage} use, ${(dpPctOfPrice * 100).toFixed(1)}% down)`, `${(ffRate * 100).toFixed(2)}%`);
+      addStep(`Funding fee on base loan`, fmt(fundingFee), '×');
+    } else {
+      addStep(`Funding fee — exempt`, '$0');
+    }
+
+    addStep(`Final loan amount${financeFee && !exempt ? ' (fee financed)' : ''}`, fmt(finalLoan), '=');
+
+    steps.innerHTML = stepHTML;
+  }
+
+  // ===== Toggle interactions =====
+  // Show/hide partial fields based on scenario, and auto-set funding fee tier
+  function updateEntitlementUI() {
+    const scenario = document.querySelector('input[name="ent-scenario"]:checked').value;
+    const isPartial = (scenario === 'active');
+    document.getElementById('partial-fields').style.display = isPartial ? 'block' : 'none';
+
+    // Auto-set funding fee tier:
+    // - first-time → first use (2.15%)
+    // - restored or active → subsequent use (3.3%)
+    const expectedUsage = (scenario === 'first-time') ? 'first' : 'subsequent';
+    document.getElementById('use-' + expectedUsage).checked = true;
+
+    // Update scenario help text
+    const help = document.getElementById('scenario-help');
+    if (scenario === 'first-time') {
+      help.innerHTML = 'Full entitlement. No VA loan limit, no down payment regardless of price (Blue Water Navy Act, Jan 2020).';
+    } else if (scenario === 'restored') {
+      help.innerHTML = 'Restored to full entitlement. No VA loan limit, no down payment — but the funding fee is at the subsequent-use tier.';
+    } else {
+      help.innerHTML = 'Partial entitlement. Your county loan limit caps zero-down capacity; entitlement charged to the active loan reduces it further.';
+    }
+  }
+
+  // No-op stub kept for compatibility — entry method toggle removed in favor of multi-loan table
+  function updateEntMethodUI() {}
+
+  // ===== Multi-loan table manager =====
+  // Builds rows for primary (#loans-table) and co-borrower (#cob-loans-table)
+  function makeLoansManager(tableId, addBtnId, totalChargedId, hiddenInputId, prefill) {
+    const table = document.getElementById(tableId);
+    const addBtn = document.getElementById(addBtnId);
+    const totalEl = document.getElementById(totalChargedId);
+    const hidden = document.getElementById(hiddenInputId);
+
+    function renderRow(rowData) {
+      const row = document.createElement('div');
+      row.className = 'loan-row';
+      row.innerHTML = `
+        <input type="text" class="loan-label" placeholder="Label / state" value="${rowData.label || ''}" />
+        <div class="loan-amount-wrap">
+          <input type="text" class="loan-amount money" inputmode="numeric" placeholder="Loan amount" value="${rowData.amount ? Number(rowData.amount).toLocaleString('en-US') : ''}" />
+        </div>
+        <div class="loan-charged-wrap">
+          <input type="text" class="loan-charged money" inputmode="numeric" placeholder="Charged" value="${rowData.charged ? Number(rowData.charged).toLocaleString('en-US') : ''}" />
+        </div>
+        <select class="loan-status">
+          <option value="active"${rowData.status === 'active' ? ' selected' : ''}>Active</option>
+          <option value="pif-no-restore"${rowData.status === 'pif-no-restore' ? ' selected' : ''}>Paid In Full — Not Restored</option>
+          <option value="pif-restored"${rowData.status === 'pif-restored' ? ' selected' : ''}>Paid In Full — Restored</option>
+        </select>
+        <button type="button" class="remove-row-btn" title="Remove this loan" aria-label="Remove this loan">×</button>
+      `;
+      const amountInput = row.querySelector('.loan-amount');
+      const chargedInput = row.querySelector('.loan-charged');
+      const statusSelect = row.querySelector('.loan-status');
+      const removeBtn = row.querySelector('.remove-row-btn');
+
+      // Track whether user manually edited charged (so we don't overwrite their override)
+      let chargedEdited = !!(rowData.charged);
+
+      function applyStatusClass() {
+        row.classList.toggle('row-restored', statusSelect.value === 'pif-restored');
+      }
+      applyStatusClass();
+
+      function autofillCharged() {
+        if (chargedEdited) return;
+        const amt = parseMoney(amountInput.value);
+        chargedInput.value = amt ? Math.round(amt * 0.25).toLocaleString('en-US') : '';
+      }
+
+      amountInput.addEventListener('input', () => {
+        const cursor = amountInput.selectionStart;
+        const oldLen = amountInput.value.length;
+        const num = parseMoney(amountInput.value);
+        amountInput.value = num ? num.toLocaleString('en-US') : '';
+        const newLen = amountInput.value.length;
+        amountInput.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
+        autofillCharged();
+        recompute();
+      });
+
+      chargedInput.addEventListener('input', () => {
+        chargedEdited = chargedInput.value.trim() !== '';
+        const cursor = chargedInput.selectionStart;
+        const oldLen = chargedInput.value.length;
+        const num = parseMoney(chargedInput.value);
+        chargedInput.value = num ? num.toLocaleString('en-US') : '';
+        const newLen = chargedInput.value.length;
+        chargedInput.setSelectionRange(cursor + (newLen - oldLen), cursor + (newLen - oldLen));
+        recompute();
+      });
+
+      statusSelect.addEventListener('change', () => {
+        applyStatusClass();
+        recompute();
+      });
+
+      removeBtn.addEventListener('click', () => {
+        row.remove();
+        recompute();
+      });
+
+      table.appendChild(row);
+    }
+
+    function recompute() {
+      let total = 0;
+      table.querySelectorAll('.loan-row').forEach(row => {
+        const status = row.querySelector('.loan-status').value;
+        if (status === 'pif-restored') return; // restored loans excluded
+        const charged = parseMoney(row.querySelector('.loan-charged').value);
+        total += charged;
+      });
+      totalEl.textContent = '$' + total.toLocaleString('en-US');
+      hidden.value = total;
+      calculate();
+    }
+
+    addBtn.addEventListener('click', () => {
+      renderRow({});
+      recompute();
+    });
+
+    // Prefill rows if provided
+    (prefill || [{}]).forEach(r => renderRow(r));
+    recompute();
+
+    return { recompute, renderRow };
+  }
+
+  const primaryLoans = makeLoansManager('loans-table', 'add-loan-btn', 'loans-total-charged', 'used-entitlement', [{}]);
+
+  document.querySelectorAll('input[name="ent-scenario"]').forEach(r => {
+    r.addEventListener('change', () => {
+      // Update is-checked class for browsers without :has() support
+      document.querySelectorAll('.scenario-option').forEach(opt => {
+        const input = opt.querySelector('input[name="ent-scenario"]');
+        opt.classList.toggle('is-checked', input && input.checked);
+      });
+      updateEntitlementUI();
+      calculate();
+    });
+  });
+
+  // Initial scenario class application
+  document.querySelectorAll('.scenario-option').forEach(opt => {
+    const input = opt.querySelector('input[name="ent-scenario"]');
+    opt.classList.toggle('is-checked', input && input.checked);
+  });
+
+  // ===== Joint borrower UI =====
+  function updateJointUI() {
+    const isJoint = document.querySelector('input[name="joint"]:checked').value === 'yes';
+    document.getElementById('joint-fields').style.display = isJoint ? 'block' : 'none';
+    if (isJoint) updateCobScenarioUI();
+  }
+
+  function updateCobScenarioUI() {
+    const cobScenario = document.querySelector('input[name="cob-scenario"]:checked').value;
+    const isPartial = (cobScenario === 'active');
+    document.getElementById('cob-partial-fields').style.display = isPartial ? 'block' : 'none';
+  }
+
+  document.querySelectorAll('input[name="joint"]').forEach(r => {
+    r.addEventListener('change', () => { updateJointUI(); calculate(); });
+  });
+
+  document.querySelectorAll('input[name="cob-scenario"]').forEach(r => {
+    r.addEventListener('change', () => {
+      document.querySelectorAll('#joint-fields .scenario-option').forEach(opt => {
+        const input = opt.querySelector('input[name="cob-scenario"]');
+        opt.classList.toggle('is-checked', input && input.checked);
+      });
+      updateCobScenarioUI();
+      calculate();
+    });
+  });
+
+  const cobLoans = makeLoansManager('cob-loans-table', 'cob-add-loan-btn', 'cob-loans-total-charged', 'cob-prior-loan-amount', [{}]);
+
+  // Initial cob scenario class application
+  document.querySelectorAll('#joint-fields .scenario-option').forEach(opt => {
+    const input = opt.querySelector('input[name="cob-scenario"]');
+    opt.classList.toggle('is-checked', input && input.checked);
+  });
+
+  document.querySelectorAll('input[name="usage"]').forEach(r => {
+    r.addEventListener('change', calculate);
+  });
+
+  document.getElementById('exempt').addEventListener('change', calculate);
+  document.getElementById('finance-fee').addEventListener('change', calculate);
+
+  // Workings toggle
+  const workingsToggle = document.getElementById('workings-toggle');
+  const workingsContent = document.getElementById('workings-content');
+  workingsToggle.addEventListener('click', () => {
+    const isOpen = workingsContent.classList.toggle('open');
+    workingsToggle.classList.toggle('open', isOpen);
+    const labelText = isOpen ? 'Hide calculation steps' : 'Show calculation steps';
+    workingsToggle.innerHTML = `<span class="arrow">▸</span> ${labelText}`;
+  });
+
+  // Initial render
+  updateEntitlementUI();
+  updateEntMethodUI();
+  updateJointUI();
+  calculate();
+
+  // ============ Input validation ============
+  const validateMoneyInput = (input) => {
+    const field = input.closest('.field');
+    if (!field) return true;
+    let errorEl = field.querySelector('.field-error');
+    if (!errorEl) {
+      errorEl = document.createElement('div');
+      errorEl.className = 'field-error';
+      errorEl.setAttribute('role', 'alert');
+      field.appendChild(errorEl);
+    }
+    const raw = (input.value || '').trim();
+    const value = parseMoney(raw);
+    if (raw === '' || isNaN(value) || value <= 0) {
+      field.classList.add('has-error');
+      errorEl.textContent = 'Enter a number greater than zero.';
+      input.setAttribute('aria-invalid', 'true');
+      return false;
+    }
+    field.classList.remove('has-error');
+    input.removeAttribute('aria-invalid');
+    return true;
+  };
+
+  document.querySelectorAll('input.money').forEach((input) => {
+    input.addEventListener('blur', () => validateMoneyInput(input));
+    input.addEventListener('input', () => {
+      const field = input.closest('.field');
+      if (field && field.classList.contains('has-error')) {
+        validateMoneyInput(input);
+      }
+    });
+  });
+</script>
+
+</body>
+</html>
