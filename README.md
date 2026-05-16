@@ -14,13 +14,17 @@ Single-file static HTML calculator for VA loan officers. No build step. No backe
 
 ## To brand for your firm
 
-Edit `index.html` directly:
+⚠️ **Before publishing under your brand, read [`CHECKLIST.md`](./CHECKLIST.md) and use [`COMPLIANCE-TEMPLATE.md`](./COMPLIANCE-TEMPLATE.md) for the verbatim disclosure language.** The default page ships with `noindex` and a DEMO banner because it is not safe to publish to consumers without an LO-specific NMLS block, state licensing list, and the Equal Housing Opportunity logo.
 
-1. **`<title>`** — line ~6, swap "VA Entitlement Calculator" for your brand
-2. **Top nav** — line ~1080, add company name as `topnav-brand`, optionally add a "Pre-qualify" CTA linking to your contact form / scheduler
-3. **Footer disclaimer** — line ~1380, swap in your firm's approved compliance text including your NMLS# and your sponsoring lender's NMLS#
-4. **Hero copy** (`<header class="masthead">`) — adjust subtitle if you want to position the tool differently
-5. **Optional** — uncomment / add a contact card after the results panel for direct pre-qualification
+Quick-start edits to `index.html`:
+
+1. **`<title>`** — line ~6, swap with your brand
+2. **`<meta name="robots">`** — line ~8, change `noindex, nofollow` → `index, follow` only after all CHECKLIST items are complete
+3. **DEMO banner** — line ~1085, remove the red banner once page is compliance-reviewed
+4. **Top nav brand** — line ~1100, add company name as `topnav-brand`
+5. **Footer** — line ~1402, replace with branded footer from `COMPLIANCE-TEMPLATE.md` §1 (includes EHO logo, NMLS block, state licensing, Advertisement identifier)
+6. **State-specific language** — `COMPLIANCE-TEMPLATE.md` §4 has starter language for CA / NY / TX / MA / IL / WA / FL / CO; expand per your license list
+7. **Have a compliance attorney review** the final page before going live
 
 ## To deploy
 
