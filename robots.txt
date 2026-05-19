@@ -1,0 +1,4 @@
+# Demo instance — not a consumer mortgage tool.
+# noindex is also enforced via <meta name="robots"> in index.html.
+User-agent: *
+Disallow: /

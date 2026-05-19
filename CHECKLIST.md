@@ -27,6 +27,15 @@
   - Massachusetts, Illinois, Washington, Oregon, Colorado: state-specific bullets
   - Confirm with your compliance team for every state on your license list
 
+## Hard prohibitions (do NOT do any of these on the demo instance)
+
+- [ ] **No lead-capture forms.** No email, phone, name, or "request a custom report" inputs. The moment any input field exists that captures consumer info, the page is a consumer marketing tool and the demo posture is gone — full CHECKLIST becomes mandatory
+- [ ] **No VA seal, DOD insignia, government flag art, or military service emblem** anywhere in the design. Imagery alone can imply government affiliation regardless of footer disclaimers (MAP Rule §1014.3(e))
+- [ ] **No "Apply now," "Get rates," or "See if you qualify" CTAs** linking off-page to a loan application or rate quote
+- [ ] **No phone number, email address, or scheduler link** in nav, hero, footer, or sidebar — even your own
+- [ ] **No removal of the red DEMO banner or cream VA non-affiliation banner** without a fully branded, compliance-reviewed replacement footer
+- [ ] **No third-party tracking pixels** (Google Analytics, Meta Pixel, LinkedIn Insight, etc.) on form-input fields. CFPB has signaled enforcement interest in mortgage tools that share input data with ad networks
+
 ## Strongly recommended
 
 - [ ] If you add a **"Pre-qualify" or "Apply" CTA** to the top nav or after the results panel, do NOT use the words "pre-approval" without your compliance team's specific approved disclaimer. The terms "pre-approval" and "pre-qualification" are regulated under MAP Rule §1014.3(c) and TRID interpretive rules

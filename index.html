@@ -20,6 +20,13 @@
 <title>VA Entitlement Calculator — Demo Instance for Loan Officers</title>
 <meta name="description" content="Open-source VA entitlement calculator demo instance for loan officers. Fork the repo to host your own branded version per CFPB MAP Rule and state mortgage advertising requirements.">
 <meta name="robots" content="noindex, nofollow">
+<meta property="og:type" content="website">
+<meta property="og:title" content="VA Entitlement Calculator — LO Demo / Reference Build">
+<meta property="og:description" content="Open-source loan-officer reference tool. Not a consumer mortgage product. Fork the repo to deploy a branded, compliance-reviewed version.">
+<meta property="og:url" content="https://vacalc.chasekelly.com/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="VA Entitlement Calculator — LO Demo / Reference Build">
+<meta name="twitter:description" content="Open-source loan-officer reference tool. Not a consumer mortgage product.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -205,15 +212,21 @@
     border-top: 1px solid var(--rule-strong);
   }
 
-  /* ============ TOP NAV ============ */
-  .topnav {
-    background: var(--paper);
-    border-bottom: 1px solid var(--rule-strong);
+  /* ============ STICKY HEADER STACK ============ */
+  /* Persistent disclosure banners + nav must stay visible per MAP Rule
+     "clear and conspicuous" — wrap them in a sticky container so scrolling
+     keeps the demo notice + VA non-affiliation banner on screen. */
+  .sticky-header {
     position: sticky;
     top: 0;
     z-index: 50;
+  }
+
+  .topnav {
+    background: var(--paper);
+    border-bottom: 1px solid var(--rule-strong);
     backdrop-filter: blur(8px);
-    background-color: rgba(250, 246, 238, 0.9);
+    background-color: rgba(250, 246, 238, 0.94);
   }
 
   .topnav-inner {
@@ -624,7 +637,7 @@
     color: var(--paper);
     padding: 40px 36px;
     position: sticky;
-    top: 88px;
+    top: 156px; /* clears sticky header stack: demo banner + VA banner + nav + buffer */
     border-radius: 16px;
     box-shadow: 0 12px 40px rgba(10, 22, 40, 0.18), 0 2px 6px rgba(10, 22, 40, 0.08);
     background-image:
@@ -1080,32 +1093,37 @@
 </head>
 <body>
 
-<!-- DEMO INSTANCE BANNER — do not remove on demo deployments -->
-<div role="alert" style="background:#7a0a0a;color:#fff;padding:10px 24px;text-align:center;font:600 12px/1.5 'Inter',system-ui,sans-serif;letter-spacing:0.04em;">
-  ⚠ DEMO INSTANCE — NOT A CONSUMER MORTGAGE TOOL. This is an open-source loan-officer reference build. Fork the <a href="https://github.com/chasepkelly/va-entitlement-calculator" target="_blank" style="color:#ffd166;text-decoration:underline;">source repo</a> and host your own branded, compliance-reviewed version before any consumer use.
-</div>
-
-<!-- VA non-affiliation banner (clear and conspicuous per MAP Rule §1014.3(e) + 38 USC §3709(d)) -->
-<div role="note" style="background:#fdf6e3;border-bottom:1px solid #d6cfc0;padding:10px 24px;text-align:center;font:500 12px/1.5 'Inter',system-ui,sans-serif;color:#3a3526;">
-  Not provided by, affiliated with, or endorsed by the U.S. Department of Veterans Affairs or any government agency.
-</div>
-
-<nav class="topnav" aria-label="Primary">
-  <div class="topnav-inner">
-    <a href="/" class="topnav-brand">VA Entitlement Calculator</a>
-    <div class="topnav-links">
-      <a href="#how-it-works">How it works</a>
-      <a href="https://github.com/chasepkelly/va-entitlement-calculator" target="_blank" rel="noopener">Source / Fork</a>
-    </div>
+<div class="sticky-header">
+  <!-- DEMO INSTANCE BANNER — do not remove on demo deployments -->
+  <div role="region" aria-label="Demo notice" style="background:#7a0a0a;color:#fff;padding:10px 24px;text-align:center;font:600 12px/1.5 'Inter',system-ui,sans-serif;letter-spacing:0.04em;">
+    ⚠ DEMO INSTANCE — NOT A CONSUMER MORTGAGE TOOL. This is an open-source loan-officer reference build. Fork the <a href="https://github.com/chasepkelly/va-entitlement-calculator" target="_blank" style="color:#ffd166;text-decoration:underline;">source repo</a> and host your own branded, compliance-reviewed version before any consumer use.
   </div>
-</nav>
+
+  <!-- VA non-affiliation banner (clear and conspicuous per MAP Rule §1014.3(e) + 38 USC §3709(d)) -->
+  <div role="region" aria-label="VA non-affiliation notice" style="background:#fdf6e3;border-bottom:1px solid #d6cfc0;padding:10px 24px;text-align:center;font:500 12px/1.5 'Inter',system-ui,sans-serif;color:#3a3526;">
+    Not provided by, affiliated with, or endorsed by the U.S. Department of Veterans Affairs or any government agency.
+  </div>
+
+  <nav class="topnav" aria-label="Primary">
+    <div class="topnav-inner">
+      <a href="/" class="topnav-brand" style="line-height:1.15;">
+        VA Entitlement Calculator
+        <span style="display:block;font-family:'Fraunces',serif;font-style:italic;font-size:11px;font-weight:400;color:var(--ink-muted);letter-spacing:0;">Open-source · for loan officers</span>
+      </a>
+      <div class="topnav-links">
+        <a href="#how-it-works">How it works</a>
+        <a href="https://github.com/chasepkelly/va-entitlement-calculator" target="_blank" rel="noopener">Source / Fork</a>
+      </div>
+    </div>
+  </nav>
+</div>
 
 <div class="container">
 
   <header class="masthead">
     <div class="eyebrow">VA Loan Analysis · 2026 Limits</div>
     <h1 class="title">VA Entitlement <em>Calculator</em></h1>
-    <p class="subtitle">Worksheet-accurate guaranty, max zero-down loan, and required cash-to-close — including partial entitlement, joint-veteran loans, multi-unit limits, and multi-loan COE entry.</p>
+    <p class="subtitle">VA Pamphlet 26-7 worksheet math — estimated zero-down capacity, estimated cash needed at closing, and partial-entitlement / joint-veteran / multi-unit / multi-loan COE scenarios.</p>
   </header>
 
   <div class="grid">
@@ -1236,7 +1254,7 @@
             <input type="radio" id="joint-yes" name="joint" value="yes" />
             <label for="joint-yes">Two veteran borrowers</label>
           </div>
-          <div class="field-help" id="joint-help">Two veteran-borrowers can pool entitlement on one loan. Each must occupy the property as primary residence. Non-veteran co-borrowers (e.g. non-vet spouse) handled differently — call for those scenarios.</div>
+          <div class="field-help" id="joint-help">Two veteran-borrowers can pool entitlement on one loan. Each must occupy the property as primary residence. Non-veteran co-borrowers (e.g. non-vet spouse) are handled differently — work with a licensed loan officer for those scenarios.</div>
         </div>
 
         <div id="joint-fields" style="display: none;">
@@ -1394,8 +1412,8 @@
 
     <div class="footnote-grid">
       <div class="col">
-        <h4>Maximum zero-down loan</h4>
-        <p>For partial entitlement: <em>(County limit × 25%) − Used entitlement, divided by 25%.</em> When (entitlement + 25% × purchase price) covers the loan, no down payment is required.</p>
+        <h4>Estimated zero-down loan capacity</h4>
+        <p>For partial entitlement: <em>(County limit × 25%) − Used entitlement, divided by 25%.</em> When (entitlement + 25% × purchase price) covers the loan, no down payment is mathematically required — subject to credit, income, and lender approval.</p>
       </div>
       <div class="col">
         <h4>Required down payment</h4>
@@ -1793,7 +1811,7 @@
     }
 
     addStep(`Total down payment / cash equity`, fmt(totalDownPayment), '=');
-    addStep(`Base loan amount`, fmt(baseLoan));
+    addStep(`Base loan amount (estimated)`, fmt(baseLoan));
 
     if (!exempt) {
       addStep(`Funding fee rate (${usage} use, ${(dpPctOfPrice * 100).toFixed(1)}% down)`, `${(ffRate * 100).toFixed(2)}%`);
@@ -1802,7 +1820,7 @@
       addStep(`Funding fee — exempt`, '$0');
     }
 
-    addStep(`Final loan amount${financeFee && !exempt ? ' (fee financed)' : ''}`, fmt(finalLoan), '=');
+    addStep(`Estimated total financed amount${financeFee && !exempt ? ' (fee financed)' : ''}`, fmt(finalLoan), '=');
 
     steps.innerHTML = stepHTML;
   }
