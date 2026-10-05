@@ -16,7 +16,7 @@
 - [ ] **Result labels** ("Estimated total financed amount", "Estimated cash needed at closing"): keep — these are deliberately reframed away from credit-offer language per Reg Z trigger-term defense
 - [ ] **Regulation Z disclaimer block** (after calculation steps, inside results panel): keep
 - [ ] **Funding fee schedule** (line ~1391): verify percentages against the current VA schedule at va.gov before each annual republish; update the "effective 2026" string accordingly
-- [ ] **County loan limits** (line ~1416): regenerate `COUNTY_DATA` from the current year's FHFA HERA-based dataset each November
+- [ ] **County loan limits**: limits load from the CRM `loan_limits` table (annual FHFA CSV loader lives in atomic-crm `scripts/`); refresh the embedded `COUNTY_DATA` fallback in `index.html` occasionally. See README "Updating county limits"
 - [ ] **Footer Equal Housing Opportunity logo** (line ~1414): keep; do NOT remove the SVG (HUD 24 CFR 109.30 — text-only treatment is insufficient for interactive tools)
 - [ ] **Footer "Advertisement / Informational Tool" identifier**: keep
 - [ ] **Footer NMLS identification block**: ADD your name + NMLS#, your company's legal name + NMLS#, branch street address, phone, and a link to nmlsconsumeraccess.org (see COMPLIANCE-TEMPLATE.md)

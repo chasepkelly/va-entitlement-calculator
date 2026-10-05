@@ -8,7 +8,7 @@ Single-file static HTML calculator for VA loan officers. No build step. No backe
 - Handles full entitlement, restored entitlement (Blue Water Navy Act), and partial entitlement
 - Supports multi-loan COE entry — Active / PIF–Restored / PIF–Not Restored — with auto-25% charged calculation per loan and override
 - Joint VA loan support (two veteran borrowers, pooled entitlement, capped at 25% × CLL per loan)
-- 2026 FHFA HERA-based county loan limits for all 3,226 counties × 4 unit counts (1/2/3/4-unit)
+- FHFA HERA-based county loan limits (CRM table with embedded fallback) for all 3,226 counties × 4 unit counts (1/2/3/4-unit)
 - Funding fee tiers (first/subsequent use, exempt) with optional financing
 - Live calculation steps panel showing the underlying worksheet math
 
@@ -41,18 +41,17 @@ No environment variables, no API keys, no cookies.
 
 ## Updating county limits
 
-Each November the FHFA publishes new conforming loan limits. To update:
+County loan limits come from the CRM `loan_limits` table (Supabase, anon read). The page fetches the latest row with `effective_date <= today` on load and falls back to the embedded `COUNTY_DATA` object in `index.html` if the fetch fails or times out (3 s).
 
-1. Download `fullcountyloanlimitlist{YEAR}_hera-based_final_flat.csv` from fhfa.gov
-2. Regenerate the `COUNTY_DATA` object in `index.html` (line ~1400) — schema:
-   ```js
-   { meta: { baseline, ceiling, baselines:{1,2,3,4}, ceilings:{1,2,3,4} },
-     states: { CODE: "Name", ... },
-     counties: { CODE: [[name, l1|null, l2|null, l3|null, l4|null], ...] }
-   }
-   ```
-3. Update the year string in `meta.year` and the footer disclaimer
-4. `null` for any unit limit means "use the baseline for that unit count" (saves bytes for ~3000 baseline counties)
+- Annual update: run the loader script in atomic-crm (`scripts/`, the FHFA CSV loader) with the new FHFA flat CSV. No change to this page is needed.
+- Refresh the embedded fallback occasionally (after the annual load) by copying the new row's baseline, ceiling, and counties into `COUNTY_DATA`. Schema:
+  ```js
+  { meta: { baseline, ceiling, effectiveDate, source, baselines:{1,2,3,4}, ceilings:{1,2,3,4} },
+    states: { CODE: "Name", ... },
+    counties: { CODE: [[name, l1|null, l2|null, l3|null, l4|null], ...] }
+  }
+  ```
+- `null` for any unit limit means "use the baseline for that unit count".
 
 ## Compliance notes
 
@@ -64,4 +63,4 @@ Math sourced from:
 - VA Pamphlet 26-7, Chapter 3 (Maximum Guaranty Table)
 - VA Pamphlet 26-7, Chapter 7 (Joint Loans, section 1.i)
 - VA Circular 26-19-30, Exhibit A (Adjustment of Loan Limit Examples)
-- FHFA 2026 Conforming Loan Limit Values (HERA-based dataset)
+- FHFA Conforming Loan Limit Values (HERA-based dataset)
